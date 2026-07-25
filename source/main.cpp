@@ -3,9 +3,15 @@
 #include <QLabel>
 #include <QVBoxLayout>
 
+#include "core/AstryonCore.hpp"
+#include "ui/AstryonUI.hpp"
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
+
+    AstryonCore core;
+    core.initialize();
 
     QWidget window;
     window.setWindowTitle("Astryon Home");
@@ -20,5 +26,9 @@ int main(int argc, char *argv[])
     window.resize(800, 450);
     window.show();
 
-    return app.exec();
+    int result = app.exec();
+
+    core.shutdown();
+
+    return result;
 }

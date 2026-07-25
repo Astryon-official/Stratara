@@ -8,8 +8,9 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
 add_executable(AstryonHome
     main.cpp
+    core/AstryonCore.cpp
+    ui/AstryonUI.cpp
 )
-
 target_link_libraries(AstryonHome
     Qt6::Widgets
 )
