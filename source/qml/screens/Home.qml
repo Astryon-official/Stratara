@@ -1,58 +1,120 @@
 import QtQuick
 import QtQuick.Controls
+
 import "../components"
 
+
 ApplicationWindow {
+
     visible: true
+
+
     width: 1280
     height: 720
+
+
     title: "Astryon Home"
 
-    color: "#0b0b0b"
+
+    color: "#050505"
+
+
+
+    NavigationBar {}
+
+
 
     Column {
+
+
         anchors.centerIn: parent
-        spacing: 40
+
+
+        spacing: 50
+
+
 
         Text {
-            text: "Astryon Home"
+
+            text: "Welcome back"
+
             color: "white"
-            font.pixelSize: 50
-            anchors.horizontalCenter: parent.horizontalCenter
+
+            font.pixelSize: 48
+
+            font.bold: true
         }
 
+
+
         Row {
-            spacing: 30
-            anchors.horizontalCenter: parent.horizontalCenter
 
-            AstryonTile {
-                title: "Games"
-                icon: "🎮"
+
+            spacing: 35
+
+
+
+            AstryonCard {
+
+                title:"Games"
+
+                subtitle:"Play"
+
+                icon:"🎮"
+
+                selected:true
             }
 
-            AstryonTile {
-                title: "Live TV"
-                icon: "📺"
+
+
+            AstryonCard {
+
+                title:"Live TV"
+
+                subtitle:"Channels"
+
+                icon:"📺"
             }
 
-            AstryonTile {
-                title: "Streaming"
-                icon: "🎬"
+
+
+            AstryonCard {
+
+                title:"Streaming"
+
+                subtitle:"Movies & Shows"
+
+                icon:"🎬"
             }
         }
 
-        Row {
-            spacing: 30
-            anchors.horizontalCenter: parent.horizontalCenter
 
-            AstryonTile {
-                title: "Media"
-                icon: "🎵"
+
+        Row {
+
+
+            spacing:35
+
+
+
+            AstryonCard {
+
+                title:"Media"
+
+                subtitle:"Music"
+
+                icon:"🎵"
             }
 
-            AstryonTile {
-                title: "Settings"
-                icon: "⚙"
+
+
+            AstryonCard {
+
+                title:"Settings"
+
+                subtitle:"System"
+
+                icon:"⚙"
             }
         }
     }
