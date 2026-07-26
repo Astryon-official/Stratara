@@ -1,30 +1,30 @@
-#include <QApplication>
-#include <QWidget>
-#include <QLabel>
-#include <QVBoxLayout>
+#include <QGuiApplication>
+#include <QQmlApplicationEngine>
 
 #include "core/AstryonCore.hpp"
-#include "ui/AstryonUI.hpp"
 
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
+    QGuiApplication app(argc, argv);
 
     AstryonCore core;
     core.initialize();
 
-    QWidget window;
-    window.setWindowTitle("Astryon Home");
+    QQmlApplicationEngine engine;
 
-    QLabel title("Astryon Home");
+    const QUrl url(QStringLiteral("qrc:/qml/screens/Home.qml"));
 
-    QVBoxLayout layout;
-    layout.addWidget(&title);
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::objectCreationFailed,
+        &app,
+        []() {
+            QCoreApplication::exit(-1);
+        },
+        Qt::QueuedConnection
+    );
 
-    window.setLayout(&layout);
-
-    window.resize(800, 450);
-    window.show();
+    engine.load(url);
 
     int result = app.exec();
 
