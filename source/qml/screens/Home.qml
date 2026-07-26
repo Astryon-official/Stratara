@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import "../components"
 
 ApplicationWindow {
     visible: true
@@ -7,24 +8,52 @@ ApplicationWindow {
     height: 720
     title: "Astryon Home"
 
-    Rectangle {
-        anchors.fill: parent
-        color: "#111111"
+    color: "#0b0b0b"
 
-        Column {
-            anchors.centerIn: parent
-            spacing: 20
+    Column {
+        anchors.centerIn: parent
+        spacing: 40
 
-            Label {
-                text: "Astryon Home"
-                font.pixelSize: 42
-                horizontalAlignment: Text.AlignHCenter
+        Text {
+            text: "Astryon Home"
+            color: "white"
+            font.pixelSize: 50
+            anchors.horizontalCenter: parent.horizontalCenter
+        }
+
+        Row {
+            spacing: 30
+            anchors.horizontalCenter: parent.horizontalCenter
+
+            AstryonTile {
+                title: "Games"
+                icon: "🎮"
             }
 
-            Button { text: "🎮 Games" }
-            Button { text: "📺 Live TV" }
-            Button { text: "🎬 Streaming" }
-            Button { text: "⚙ Settings" }
+            AstryonTile {
+                title: "Live TV"
+                icon: "📺"
+            }
+
+            AstryonTile {
+                title: "Streaming"
+                icon: "🎬"
+            }
+        }
+
+        Row {
+            spacing: 30
+            anchors.horizontalCenter: parent.horizontalCenter
+
+            AstryonTile {
+                title: "Media"
+                icon: "🎵"
+            }
+
+            AstryonTile {
+                title: "Settings"
+                icon: "⚙"
+            }
         }
     }
 }
