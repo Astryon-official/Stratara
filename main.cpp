@@ -2,6 +2,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 
+#include "services/BluetoothManager.h"
 #include "services/ControllerManager.h"
 #include "services/SettingsLauncher.h"
 
@@ -11,6 +12,7 @@ int main(int argc, char *argv[])
 
     ControllerManager controllerManager;
     SettingsLauncher settingsLauncher;
+    BluetoothManager bluetoothManager;
 
     QQmlApplicationEngine engine;
 
@@ -24,7 +26,15 @@ int main(int argc, char *argv[])
         &settingsLauncher
     );
 
-    engine.loadFromModule("Stratara", "StrataraShell");
+    engine.rootContext()->setContextProperty(
+        "bluetoothManager",
+        &bluetoothManager
+    );
+
+    engine.loadFromModule(
+        "Stratara",
+        "StrataraShell"
+    );
 
     if (engine.rootObjects().isEmpty())
         return -1;
