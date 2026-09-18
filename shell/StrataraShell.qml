@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Window
 import QtPositioning
-import QtQuick.Shapes
 import QtQuick.Layouts
 
 ApplicationWindow {
@@ -13,12 +12,24 @@ ApplicationWindow {
     color: "#000000"
     title: "Stratara"
 
+    // ============================================================
+    // STATE
+    // ============================================================
+
     property bool weatherOpen: false
     property bool weatherLoaded: false
-    property bool bluetoothOpen: false
 
-    property int controllerFocusIndex: 0
+    property bool bluetoothOpen: false
+    property bool wifiOpen: false
+    property bool powerOpen: false
+    property bool liveTVOpen: false
+
     property bool controllerActive: false
+    property int controllerFocusIndex: 0
+
+    property int bluetoothControllerFocus: 0
+    property int wifiControllerFocus: 0
+    property int powerControllerFocus: 0
 
     property real currentLatitude: -33.8688
     property real currentLongitude: 151.2093
@@ -32,32 +43,9 @@ ApplicationWindow {
     property string weatherHigh: "--°"
     property string weatherLow: "--°"
 
-    function moveControllerFocus(direction) {
-        controllerActive = true
-
-        if (direction === "left") {
-            controllerFocusIndex = Math.max(0, controllerFocusIndex - 1)
-        } else if (direction === "right") {
-            controllerFocusIndex = Math.min(3, controllerFocusIndex + 1)
-        } else if (direction === "down") {
-            controllerFocusIndex = 4
-        } else if (direction === "up" && controllerFocusIndex === 4) {
-            controllerFocusIndex = 0
-        }
-    }
-
-    function activateControllerFocus() {
-        if (controllerFocusIndex === 4) {
-            weatherOpen = true
-            bluetoothOpen = false
-            return
-        }
-
-        var card = exploreCards.children[controllerFocusIndex]
-
-        if (card)
-            card.cardClicked()
-    }
+    // ============================================================
+    // FONTS
+    // ============================================================
 
     FontLoader {
         id: montserratRegular
@@ -73,6 +61,10 @@ ApplicationWindow {
         id: montserratSemiBold
         source: "file:///usr/share/fonts/TTF/Montserrat-SemiBold.ttf"
     }
+
+    // ============================================================
+    // WEATHER
+    // ============================================================
 
     function weatherDescription(code) {
         if (code === 0)
@@ -111,8 +103,8 @@ ApplicationWindow {
     function loadWeather() {
         var url =
         "https://api.open-meteo.com/v1/forecast" +
-        "?latitude=" + window.currentLatitude +
-        "&longitude=" + window.currentLongitude +
+        "?latitude=" + currentLatitude +
+        "&longitude=" + currentLongitude +
         "&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m" +
         "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
         "&timezone=auto"
@@ -124,37 +116,40 @@ ApplicationWindow {
                 return
 
                 if (xhr.status !== 200) {
-                    window.weatherCondition = "Weather unavailable"
+                    weatherCondition = "Weather unavailable"
                     return
                 }
 
                 try {
                     var data = JSON.parse(xhr.responseText)
 
-                    window.weatherTemperature =
+                    weatherTemperature =
                     Math.round(data.current.temperature_2m) + "°"
 
-                    window.weatherHumidity =
+                    weatherHumidity =
                     Math.round(data.current.relative_humidity_2m) + "%"
 
-                    window.weatherRain =
-                    Math.round(data.daily.precipitation_probability_max[0]) + "%"
+                    weatherRain =
+                    Math.round(
+                        data.daily.precipitation_probability_max[0]
+                    ) + "%"
 
-                    window.weatherWind =
+                    weatherWind =
                     Math.round(data.current.wind_speed_10m) + " km/h"
 
-                    window.weatherHigh =
+                    weatherHigh =
                     Math.round(data.daily.temperature_2m_max[0]) + "°"
 
-                    window.weatherLow =
+                    weatherLow =
                     Math.round(data.daily.temperature_2m_min[0]) + "°"
 
-                    window.weatherCondition =
-                    window.weatherDescription(data.current.weather_code)
+                    weatherCondition =
+                    weatherDescription(data.current.weather_code)
 
-                    window.weatherLoaded = true
-                } catch (error) {
-                    window.weatherCondition = "Weather unavailable"
+                    weatherLoaded = true
+                }
+                catch (error) {
+                    weatherCondition = "Weather unavailable"
                 }
         }
 
@@ -170,19 +165,19 @@ ApplicationWindow {
 
         onPositionChanged: {
             if (position && position.coordinate.isValid) {
-                window.currentLatitude = position.coordinate.latitude
-                window.currentLongitude = position.coordinate.longitude
-                window.loadWeather()
+                currentLatitude = position.coordinate.latitude
+                currentLongitude = position.coordinate.longitude
+                loadWeather()
             }
         }
     }
 
     Timer {
         interval: 30000
-        running: !window.weatherLoaded
+        running: !weatherLoaded
         repeat: false
 
-        onTriggered: window.loadWeather()
+        onTriggered: loadWeather()
     }
 
     Timer {
@@ -190,82 +185,672 @@ ApplicationWindow {
         running: true
         repeat: true
 
-        onTriggered: window.loadWeather()
+        onTriggered: loadWeather()
     }
+
+    // ============================================================
+    // BLUETOOTH HELPERS
+    // ============================================================
+
+    function bluetoothModelCount() {
+        if (typeof bluetoothManager === "undefined" ||
+            !bluetoothManager.devices) {
+            return 0
+            }
+
+            return bluetoothManager.devices.count
+    }
+
+    function bluetoothMatches(section, row) {
+        if (!row)
+            return false
+
+            if (section === "connected")
+                return row.deviceConnected
+
+                if (section === "available")
+                    return !row.deviceConnected && !row.devicePaired
+
+                    if (section === "paired")
+                        return row.devicePaired && !row.deviceConnected
+
+                        return false
+    }
+
+    function bluetoothSectionCount(repeater, section) {
+        var count = 0
+
+        if (!repeater)
+            return 0
+
+            for (var i = 0; i < repeater.count; i++) {
+                var row = repeater.itemAt(i)
+
+                if (bluetoothMatches(section, row) &&
+                    bluetoothUniqueAddress(repeater, i)) {
+                    count++
+                    }
+            }
+
+            return count
+    }
+
+    function bluetoothVisibleCount() {
+        return bluetoothSectionCount(
+            bluetoothConnectedRepeater,
+            "connected"
+        )
+        +
+        bluetoothSectionCount(
+            bluetoothAvailableRepeater,
+            "available"
+        )
+        +
+        bluetoothSectionCount(
+            bluetoothPairedRepeater,
+            "paired"
+        )
+    }
+
+    function bluetoothRowFocus(section, rawIndex, repeater) {
+        var ordinal = 0
+
+        if (!repeater)
+            return -1
+
+            for (var i = 0; i < repeater.count; i++) {
+                var row = repeater.itemAt(i)
+
+                if (!bluetoothMatches(section, row) ||
+                    !bluetoothUniqueAddress(repeater, i))
+                    continue
+
+                    if (i === rawIndex)
+                        return ordinal
+
+                        ordinal++
+            }
+
+            return -1
+    }
+
+    function bluetoothFocusedRow() {
+        var target = bluetoothControllerFocus - 2
+
+        if (target < 0)
+            return null
+
+            var repeaters = [
+                bluetoothConnectedRepeater,
+                bluetoothAvailableRepeater,
+                bluetoothPairedRepeater
+            ]
+
+            var sections = [
+                "connected",
+                "available",
+                "paired"
+            ]
+
+            for (var r = 0; r < repeaters.length; r++) {
+                var repeater = repeaters[r]
+                var section = sections[r]
+
+                for (var i = 0; i < repeater.count; i++) {
+                    var row = repeater.itemAt(i)
+
+                    if (!bluetoothMatches(section, row) ||
+                        !bluetoothUniqueAddress(repeater, i))
+                        continue
+
+                        if (target === 0)
+                            return row
+
+                            target--
+                }
+            }
+
+            return null
+    }
+
+    function bluetoothUniqueAddress(repeater, rawIndex) {
+        if (!repeater)
+            return true
+
+            var row = repeater.itemAt(rawIndex)
+
+            if (!row || row.deviceAddress === "")
+                return true
+
+                for (var i = 0; i < rawIndex; i++) {
+                    var previous = repeater.itemAt(i)
+
+                    if (previous &&
+                        previous.deviceAddress === row.deviceAddress) {
+                        return false
+                        }
+                }
+
+                return true
+    }
+
+    function moveBluetoothControllerFocus(direction) {
+        var deviceCount = bluetoothVisibleCount()
+        var maxFocus = deviceCount + 2
+
+        if (direction === "up") {
+            bluetoothControllerFocus =
+            Math.max(
+                0,
+                bluetoothControllerFocus - 1
+            )
+        }
+        else if (direction === "down") {
+            bluetoothControllerFocus =
+            Math.min(
+                maxFocus,
+                bluetoothControllerFocus + 1
+            )
+        }
+
+        var row = bluetoothFocusedRow()
+
+        if (row) {
+            bluetoothDeviceFlickable.contentY =
+            Math.max(
+                0,
+                Math.min(
+                    bluetoothDeviceFlickable.contentHeight -
+                    bluetoothDeviceFlickable.height,
+                    row.y - 34
+                )
+            )
+        }
+    }
+
+    function activateBluetoothControllerFocus() {
+        var deviceCount = bluetoothVisibleCount()
+
+        if (bluetoothControllerFocus === 0) {
+            bluetoothOpen = false
+            return
+        }
+
+        if (bluetoothControllerFocus === 1) {
+            if (typeof bluetoothManager !== "undefined")
+                bluetoothManager.togglePowered()
+
+                return
+        }
+
+        if (bluetoothControllerFocus >= 2 &&
+            bluetoothControllerFocus <= deviceCount + 1) {
+
+            var row = bluetoothFocusedRow()
+
+            if (row && row.activate)
+                row.activate()
+
+                return
+            }
+
+            if (bluetoothControllerFocus === deviceCount + 2) {
+                if (typeof bluetoothManager !== "undefined" &&
+                    bluetoothManager.powered) {
+                    bluetoothManager.startDiscovery()
+                    }
+            }
+    }
+
+    // ============================================================
+    // WI-FI CONTROLLER
+    // ============================================================
+
+    function wifiCount() {
+        if (typeof systemManager === "undefined" ||
+            !systemManager.wifiNetworks)
+            return 0
+
+            return systemManager.wifiNetworks.length
+    }
+
+    function moveWifiControllerFocus(direction) {
+        var count = wifiCount()
+        var maxFocus = count + 2
+
+        if (direction === "up")
+            wifiControllerFocus =
+            Math.max(0, wifiControllerFocus - 1)
+
+            else if (direction === "down")
+                wifiControllerFocus =
+                Math.min(maxFocus, wifiControllerFocus + 1)
+
+                if (wifiControllerFocus >= 3 &&
+                    wifiControllerFocus <= count + 2 &&
+                    wifiNetworkRepeater.count > 0) {
+
+                    var row =
+                    wifiNetworkRepeater.itemAt(
+                        wifiControllerFocus - 3
+                    )
+
+                    if (row) {
+                        wifiNetworkFlickable.contentY =
+                        Math.max(
+                            0,
+                            Math.min(
+                                wifiNetworkFlickable.contentHeight -
+                                wifiNetworkFlickable.height,
+                                row.y - 34
+                            )
+                        )
+                    }
+                    }
+    }
+
+    function activateWifiControllerFocus() {
+        var count = wifiCount()
+
+        if (wifiControllerFocus === 0) {
+            wifiOpen = false
+            return
+        }
+
+        if (wifiControllerFocus === 1) {
+            if (typeof systemManager !== "undefined")
+                systemManager.toggleWifi()
+
+                return
+        }
+
+        if (wifiControllerFocus === 2)
+            return
+
+            if (wifiControllerFocus >= 3 &&
+                wifiControllerFocus <= count + 2 &&
+                typeof systemManager !== "undefined") {
+
+                var network =
+                systemManager.wifiNetworks[
+                    wifiControllerFocus - 3
+                ]
+
+                if (network)
+                    systemManager.connectWifi(network)
+                }
+    }
+
+    // ============================================================
+    // POWER CONTROLLER
+    // ============================================================
+
+    function performPowerAction(action) {
+        if (typeof systemManager === "undefined")
+            return
+
+            if (action === "lock")
+                systemManager.lock()
+
+                else if (action === "logout")
+                    systemManager.logout()
+
+                    else if (action === "sleep")
+                        systemManager.sleep()
+
+                        else if (action === "restart") {
+                            if (typeof systemManager.restart === "function")
+                                systemManager.restart()
+                        }
+
+                        else if (action === "shutdown")
+                            systemManager.shutdown()
+
+                            powerOpen = false
+    }
+
+    function movePowerControllerFocus(direction) {
+        if (direction === "up") {
+            powerControllerFocus =
+            Math.max(
+                0,
+                powerControllerFocus - 1
+            )
+        }
+        else if (direction === "down") {
+            powerControllerFocus =
+            Math.min(
+                5,
+                powerControllerFocus + 1
+            )
+        }
+    }
+
+    function activatePowerControllerFocus() {
+        if (powerControllerFocus === 0) {
+            powerOpen = false
+            return
+        }
+
+        if (powerControllerFocus === 1)
+            performPowerAction("lock")
+
+            else if (powerControllerFocus === 2)
+                performPowerAction("logout")
+
+                else if (powerControllerFocus === 3)
+                    performPowerAction("sleep")
+
+                    else if (powerControllerFocus === 4)
+                        performPowerAction("restart")
+
+                        else if (powerControllerFocus === 5)
+                            performPowerAction("shutdown")
+    }
+
+    // ============================================================
+    // MAIN CONTROLLER NAVIGATION
+    // ============================================================
+
+    function moveControllerFocus(direction) {
+        controllerActive = true
+
+        if (liveTVOpen)
+            return
+
+            if (bluetoothOpen) {
+                moveBluetoothControllerFocus(direction)
+                return
+            }
+
+            if (wifiOpen) {
+                moveWifiControllerFocus(direction)
+                return
+            }
+
+            if (powerOpen) {
+                movePowerControllerFocus(direction)
+                return
+            }
+
+            if (weatherOpen) {
+                if (direction === "up")
+                    weatherOpen = false
+
+                    return
+            }
+
+            if (controllerFocusIndex >= 0 &&
+                controllerFocusIndex <= 3) {
+
+                if (direction === "left") {
+                    controllerFocusIndex =
+                    Math.max(
+                        0,
+                        controllerFocusIndex - 1
+                    )
+                }
+
+                else if (direction === "right") {
+                    controllerFocusIndex =
+                    Math.min(
+                        3,
+                        controllerFocusIndex + 1
+                    )
+                }
+
+                else if (direction === "down") {
+                    if (controllerFocusIndex <= 1)
+                        controllerFocusIndex = 4
+
+                        else if (controllerFocusIndex === 2)
+                            controllerFocusIndex = 5
+
+                            else if (controllerFocusIndex === 3)
+                                controllerFocusIndex = 8
+                }
+
+                return
+                }
+
+                if (controllerFocusIndex === 4) {
+                    if (direction === "right")
+                        controllerFocusIndex = 5
+
+                        else if (direction === "up")
+                            controllerFocusIndex = 0
+
+                            return
+                }
+
+                if (controllerFocusIndex >= 5 &&
+                    controllerFocusIndex <= 8) {
+
+                    if (direction === "left") {
+                        controllerFocusIndex =
+                        controllerFocusIndex === 5
+                        ? 4
+                        : controllerFocusIndex - 1
+                    }
+
+                    else if (direction === "right") {
+                        controllerFocusIndex =
+                        Math.min(
+                            8,
+                            controllerFocusIndex + 1
+                        )
+                    }
+
+                    else if (direction === "up") {
+                        controllerFocusIndex = 3
+                    }
+                    }
+    }
+
+    // ============================================================
+    // CONTROLLER ACCEPT
+    // ============================================================
+
+    function activateControllerFocus() {
+        if (liveTVOpen)
+            return
+
+            if (bluetoothOpen) {
+                activateBluetoothControllerFocus()
+                return
+            }
+
+            if (wifiOpen) {
+                activateWifiControllerFocus()
+                return
+            }
+
+            if (powerOpen) {
+                activatePowerControllerFocus()
+                return
+            }
+
+            if (weatherOpen) {
+                weatherOpen = false
+                return
+            }
+
+            if (controllerFocusIndex === 4) {
+                weatherOpen = true
+
+                bluetoothOpen = false
+                wifiOpen = false
+                powerOpen = false
+
+                return
+            }
+
+            if (controllerFocusIndex >= 5 &&
+                controllerFocusIndex <= 8) {
+
+                var button =
+                systemButtons.children[
+                    controllerFocusIndex - 5
+                ]
+
+                if (button)
+                    button.buttonClicked()
+
+                    return
+                }
+
+                var card =
+                exploreCards.children[
+                    controllerFocusIndex
+                ]
+
+                if (card)
+                    card.cardClicked()
+    }
+
+    // ============================================================
+    // OPEN / CLOSE STATE
+    // ============================================================
+
+    onBluetoothOpenChanged: {
+        if (bluetoothOpen) {
+            bluetoothControllerFocus = 0
+
+            wifiOpen = false
+            powerOpen = false
+            weatherOpen = false
+        }
+    }
+
+    onWifiOpenChanged: {
+        if (wifiOpen) {
+            wifiControllerFocus = 0
+
+            bluetoothOpen = false
+            powerOpen = false
+            weatherOpen = false
+
+            if (typeof systemManager !== "undefined")
+                systemManager.refreshWifi()
+        }
+    }
+
+    onPowerOpenChanged: {
+        if (powerOpen) {
+            powerControllerFocus = 0
+
+            bluetoothOpen = false
+            wifiOpen = false
+            weatherOpen = false
+        }
+    }
+
+    onWeatherOpenChanged: {
+        if (weatherOpen) {
+            bluetoothOpen = false
+            wifiOpen = false
+            powerOpen = false
+        }
+    }
+
+    // ============================================================
+    // KEYBOARD
+    // ============================================================
 
     Shortcut {
         sequence: "Escape"
 
         onActivated: {
-            if (window.weatherOpen) {
-                window.weatherOpen = false
+            if (liveTVOpen) {
+                liveTVOpen = false
                 return
             }
 
-            if (window.bluetoothOpen) {
-                window.bluetoothOpen = false
+            if (weatherOpen) {
+                weatherOpen = false
+                return
+            }
+
+            if (bluetoothOpen) {
+                bluetoothOpen = false
+                return
+            }
+
+            if (wifiOpen) {
+                wifiOpen = false
+                return
+            }
+
+            if (powerOpen) {
+                powerOpen = false
                 return
             }
         }
     }
 
-    /*
-     * XBOX CONTROLLER CONNECTION
-     */
+    // ============================================================
+    // CONTROLLER CONNECTION
+    // ============================================================
 
     Connections {
         target: controllerManager
 
         function onControllerConnected(name) {
-            window.controllerActive = true
-            window.controllerFocusIndex = 0
+            controllerActive = true
+            controllerFocusIndex = 0
         }
 
         function onControllerDisconnected() {
-            window.controllerActive = false
+            controllerActive = false
         }
 
         function onActionPressed(action) {
-            window.controllerActive = true
+            controllerActive = true
 
             if (action === "left" ||
                 action === "right" ||
                 action === "up" ||
                 action === "down") {
 
-                window.moveControllerFocus(action)
+                moveControllerFocus(action)
+                }
 
-                } else if (action === "accept") {
-                    window.activateControllerFocus()
+                else if (action === "accept") {
+                    activateControllerFocus()
+                }
 
-                } else if (action === "cancel") {
-                    window.weatherOpen = false
-                    window.bluetoothOpen = false
+                else if (action === "cancel") {
+                    liveTVOpen = false
+                    weatherOpen = false
+                    bluetoothOpen = false
+                    wifiOpen = false
+                    powerOpen = false
+                }
 
-                } else if (action === "guide") {
-                    window.weatherOpen = false
-                    window.bluetoothOpen = false
-                    window.controllerFocusIndex = 0
+                else if (action === "guide") {
+                    weatherOpen = false
+                    bluetoothOpen = false
+                    wifiOpen = false
+                    powerOpen = false
+                    controllerFocusIndex = 0
                 }
         }
     }
 
-    /*
-     * PURE BLACK BACKGROUND
-     */
+    // ============================================================
+    // BACKGROUND
+    // ============================================================
 
     Rectangle {
         anchors.fill: parent
         color: "#000000"
     }
 
-    /*
-     * HEADER
-     */
+    // ============================================================
+    // TITLE
+    // ============================================================
 
     Text {
-        id: strataraTitle
-
         anchors.top: parent.top
         anchors.left: parent.left
 
@@ -278,21 +863,20 @@ ApplicationWindow {
 
         font.family: montserratSemiBold.name
         font.pixelSize: 30
-        font.weight: Font.Normal
     }
 
-    /*
-     * EXPLORE
-     */
+    // ============================================================
+    // EXPLORE
+    // ============================================================
 
     Column {
         id: exploreSection
 
-        anchors.top: strataraTitle.bottom
+        anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
 
-        anchors.topMargin: 54
+        anchors.topMargin: 126
         anchors.leftMargin: 58
         anchors.rightMargin: 58
 
@@ -305,7 +889,6 @@ ApplicationWindow {
 
             font.family: montserratSemiBold.name
             font.pixelSize: 28
-            font.weight: Font.Normal
         }
 
         Row {
@@ -322,10 +905,10 @@ ApplicationWindow {
 
                 title: "Streaming"
                 subtitle: "Movies, shows and music"
-
                 controllerIndex: 0
 
-                onCardClicked: console.log("Streaming")
+                onCardClicked:
+                console.log("Streaming")
             }
 
             GlassCard {
@@ -334,10 +917,10 @@ ApplicationWindow {
 
                 title: "Games"
                 subtitle: "Your games, all together"
-
                 controllerIndex: 1
 
-                onCardClicked: console.log("Games")
+                onCardClicked:
+                console.log("Games")
             }
 
             GlassCard {
@@ -346,10 +929,10 @@ ApplicationWindow {
 
                 title: "Apps"
                 subtitle: "Everything you need"
-
                 controllerIndex: 2
 
-                onCardClicked: console.log("Apps")
+                onCardClicked:
+                console.log("Apps")
             }
 
             GlassCard {
@@ -358,83 +941,73 @@ ApplicationWindow {
 
                 title: "Live TV"
                 subtitle: "TV, channels and more"
-
                 controllerIndex: 3
 
-                onCardClicked: console.log("Live TV")
+                onCardClicked: {
+                    liveTVOpen = true
+
+                    weatherOpen = false
+                    bluetoothOpen = false
+                    wifiOpen = false
+                    powerOpen = false
+                }
             }
         }
-    }
 
-    /*
-     * WEATHER CARD
-     */
+        }
 
-    WeatherCard {
+        // ============================================================
+        // LIVE TV
+        // ============================================================
+
+        Loader {
+            id: liveTVLoader
+
+            anchors.fill: parent
+
+            z: 600
+
+            active: true
+
+            source: "panels/LiveTV/LiveTVPanel.qml"
+
+            onLoaded: {
+                item.open = Qt.binding(function() {
+                    return window.liveTVOpen
+                })
+
+                item.closeRequested.connect(function() {
+                    window.liveTVOpen = false
+                })
+            }
+        }
+
+    // ============================================================
+    // WEATHER CARD + SLIDE-UP DETAIL PANEL
+    // ============================================================
+
+    Item {
         id: weatherCard
 
         anchors.left: parent.left
         anchors.bottom: parent.bottom
 
         anchors.leftMargin: 58
-        anchors.bottomMargin: 38
+        anchors.bottomMargin: 68
 
         width: 505
         height: 230
-    }
 
-    /*
-     * SYSTEM BUTTONS
-     */
+        z: 401
 
-    Row {
-        id: systemButtons
-
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-
-        anchors.rightMargin: 58
-        anchors.bottomMargin: 38
-
-        spacing: 18
-
-        SystemButton {
-            iconType: "settings"
-        }
-
-        SystemButton {
-            id: bluetoothSystemButton
-            iconType: "bluetooth"
-        }
-
-        SystemButton {
-            iconType: "wifi"
-        }
-
-        SystemButton {
-            iconType: "power"
-        }
-    }
-
-    /*
-     * GLASS CARD
-     */
-
-    component GlassCard: Item {
-        id: card
-
-        property string title: ""
-        property string subtitle: ""
         property bool hovered: false
-        property int controllerIndex: -1
 
-        property bool controllerFocused:
-        window.controllerActive &&
-        window.controllerFocusIndex === controllerIndex
-
-        signal cardClicked()
-
-        scale: (hovered || controllerFocused) ? 1.06 : 1.0
+        scale:
+        hovered ||
+        weatherOpen ||
+        (controllerActive && controllerFocusIndex === 4)
+        ? 1.02
+        : 1.0
 
         Behavior on scale {
             NumberAnimation {
@@ -447,36 +1020,37 @@ ApplicationWindow {
             anchors.fill: parent
 
             radius: 26
-            color: "#101014"
+
+            color:
+            weatherOpen
+            ? "#18181e"
+            : "#101014"
 
             opacity:
-            (hovered || controllerFocused)
+            weatherCard.hovered ||
+            (controllerActive && controllerFocusIndex === 4)
             ? 0.98
-            : 0.90
+            : 0.92
 
             border.width: 1
 
             border.color:
-            (hovered || controllerFocused)
+            weatherOpen
+            ? "#555560"
+            : weatherCard.hovered ||
+            (controllerActive && controllerFocusIndex === 4)
             ? "#3b3b44"
             : "#29292f"
-        }
 
-        Rectangle {
-            anchors.fill: parent
+            Behavior on color {
+                ColorAnimation {
+                    duration: 180
+                }
+            }
 
-            radius: 26
-            color: "#29292f"
-
-            opacity:
-            (hovered || controllerFocused)
-            ? 0.32
-            : 0.0
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: 120
-                    easing.type: Easing.OutCubic
+            Behavior on border.color {
+                ColorAnimation {
+                    duration: 180
                 }
             }
         }
@@ -485,13 +1059,2412 @@ ApplicationWindow {
             anchors.fill: parent
 
             radius: 26
+
+            color: "#29292f"
+
+            opacity:
+            weatherCard.hovered ||
+            (controllerActive && controllerFocusIndex === 4)
+            ? 0.20
+            : 0
+        }
+
+        Column {
+            anchors.left: parent.left
+            anchors.top: parent.top
+
+            anchors.leftMargin: 28
+            anchors.topMargin: 24
+
+            spacing: 7
+
+            Text {
+                text: weatherLocation
+
+                color: "#a8a8b1"
+
+                font.family: montserratRegular.name
+                font.pixelSize: 15
+            }
+
+            Text {
+                text: weatherTemperature
+
+                color: "white"
+
+                font.family: montserratSemiBold.name
+                font.pixelSize: 43
+            }
+
+            Text {
+                text: weatherCondition
+
+                color: "#b3b3bc"
+
+                font.family: montserratRegular.name
+                font.pixelSize: 16
+            }
+        }
+
+        // High / Low
+        Row {
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+
+            anchors.leftMargin: 28
+            anchors.bottomMargin: 24
+
+            spacing: 9
+
+            Text {
+                text: "H " + weatherHigh
+
+                color: "#c0c0c8"
+
+                font.family: montserratMedium.name
+                font.pixelSize: 16
+            }
+
+            Text {
+                text: "•"
+
+                color: "#666670"
+
+                font.family: montserratMedium.name
+                font.pixelSize: 14
+            }
+
+            Text {
+                text: "L " + weatherLow
+
+                color: "#c0c0c8"
+
+                font.family: montserratMedium.name
+                font.pixelSize: 16
+            }
+        }
+
+        // Open indicator
+        Canvas {
+            id: weatherChevron
+
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+
+            anchors.rightMargin: 29
+            anchors.bottomMargin: 27
+
+            width: 22
+            height: 13
+
+            rotation: weatherOpen ? 0 : 180
+
+            Behavior on rotation {
+                NumberAnimation {
+                    duration: 240
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            onPaint: {
+                var ctx = getContext("2d")
+
+                ctx.clearRect(0, 0, width, height)
+
+                ctx.strokeStyle = "#b5b5be"
+                ctx.lineWidth = 2.8
+                ctx.lineCap = "round"
+                ctx.lineJoin = "round"
+
+                ctx.beginPath()
+
+                ctx.moveTo(3, 4)
+                ctx.lineTo(11, 11)
+                ctx.lineTo(19, 4)
+
+                ctx.stroke()
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+
+            hoverEnabled: true
+
+            onEntered:
+            weatherCard.hovered = true
+
+            onExited:
+            weatherCard.hovered = false
+
+            onClicked: {
+                weatherOpen = !weatherOpen
+
+                bluetoothOpen = false
+                wifiOpen = false
+                powerOpen = false
+            }
+        }
+
+        // --------------------------------------------------------
+        // WEATHER DETAIL PANEL
+        // --------------------------------------------------------
+
+        Item {
+            id: weatherPanel
+
+            anchors.left: parent.left
+            anchors.bottom: parent.top
+
+            width: parent.width
+            height: 318
+
+            z: 20
+
+            enabled: weatherOpen
+            visible: opacity > 0
+
+            opacity: weatherOpen ? 1 : 0
+
+            y: weatherOpen
+            ? 0
+            : height + 24
+
+            Behavior on y {
+                NumberAnimation {
+                    duration: weatherOpen ? 360 : 260
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: weatherOpen ? 220 : 160
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+
+                radius: 26
+
+                color: "#16161b"
+
+                border.width: 1
+                border.color: "#555560"
+            }
+
+            Text {
+                anchors.left: parent.left
+                anchors.top: parent.top
+
+                anchors.leftMargin: 26
+                anchors.topMargin: 20
+
+                text: "Weather"
+
+                color: "white"
+
+                font.family: montserratSemiBold.name
+                font.pixelSize: 22
+            }
+
+            Text {
+                anchors.right: parent.right
+                anchors.top: parent.top
+
+                anchors.rightMargin: 27
+                anchors.topMargin: 20
+
+                text: weatherCondition
+
+                color: "#9696a1"
+
+                font.family: montserratRegular.name
+                font.pixelSize: 14
+            }
+
+            // ----------------------------------------------------
+            // CURRENT WEATHER SUMMARY
+            // ----------------------------------------------------
+
+            Item {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                anchors.topMargin: 61
+
+                height: 74
+
+                Rectangle {
+                    anchors.fill: parent
+
+                    radius: 18
+
+                    color: "#1d1d23"
+
+                    border.width: 1
+                    border.color: "#292930"
+                }
+
+                Column {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    anchors.leftMargin: 17
+
+                    spacing: 1
+
+                    Text {
+                        text: weatherTemperature
+
+                        color: "#f2f2f5"
+
+                        font.family: montserratSemiBold.name
+                        font.pixelSize: 29
+                    }
+
+                    Text {
+                        text: weatherLocation
+
+                        color: "#8f8f99"
+
+                        font.family: montserratRegular.name
+                        font.pixelSize: 12
+                    }
+                }
+
+                Row {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    anchors.rightMargin: 17
+
+                    spacing: 22
+
+                    Column {
+                        spacing: 2
+
+                        Text {
+                            text: "HIGH"
+
+                            color: "#a6a6b0"
+
+                            font.family: montserratMedium.name
+                            font.pixelSize: 13
+                        }
+
+                        Text {
+                            text: weatherHigh
+
+                            color: "#f2f2f5"
+
+                            font.family: montserratSemiBold.name
+                            font.pixelSize: 19
+                        }
+                    }
+
+                    Column {
+                        spacing: 2
+
+                        Text {
+                            text: "LOW"
+
+                            color: "#a6a6b0"
+
+                            font.family: montserratMedium.name
+                            font.pixelSize: 13
+                        }
+
+                        Text {
+                            text: weatherLow
+
+                            color: "#f2f2f5"
+
+                            font.family: montserratSemiBold.name
+                            font.pixelSize: 19
+                        }
+                    }
+                }
+            }
+
+            // ----------------------------------------------------
+            // DETAIL GRID
+            // ----------------------------------------------------
+
+            Row {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                anchors.topMargin: 148
+
+                spacing: 9
+
+                WeatherDetail {
+                    width: (parent.width - 18) / 3
+                    label: "Rain"
+                    value: weatherRain
+                }
+
+                WeatherDetail {
+                    width: (parent.width - 18) / 3
+                    label: "Wind"
+                    value: weatherWind
+                }
+
+                WeatherDetail {
+                    width: (parent.width - 18) / 3
+                    label: "Humidity"
+                    value: weatherHumidity
+                }
+            }
+
+            // ----------------------------------------------------
+            // FORECAST RANGE
+            // ----------------------------------------------------
+
+            Item {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                anchors.bottomMargin: 18
+
+                height: 52
+
+                Rectangle {
+                    anchors.fill: parent
+
+                    radius: 15
+
+                    color: "#1d1d23"
+
+                    border.width: 1
+                    border.color: "#292930"
+                }
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    anchors.leftMargin: 16
+
+                    text: "Today's range"
+
+                    color: "#a6a6b0"
+
+                    font.family: montserratMedium.name
+                    font.pixelSize: 15
+                }
+
+                Row {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    anchors.rightMargin: 16
+
+                    spacing: 9
+
+                    Text {
+                        text: weatherHigh
+
+                        color: "#f2f2f5"
+
+                        font.family: montserratSemiBold.name
+                        font.pixelSize: 17
+                    }
+
+                    Text {
+                        text: "•"
+
+                        color: "#777781"
+
+                        font.family: montserratMedium.name
+                        font.pixelSize: 14
+                    }
+
+                    Text {
+                        text: weatherLow
+
+                        color: "#f2f2f5"
+
+                        font.family: montserratSemiBold.name
+                        font.pixelSize: 17
+                    }
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    // WEATHER DETAIL COMPONENT
+    // ============================================================
+
+    component WeatherDetail: Item {
+        property string label: ""
+        property string value: ""
+
+        height: 67
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 16
+
+            color: "#1d1d23"
+
+            border.width: 1
+            border.color: "#292930"
+        }
+
+        Column {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+
+            anchors.leftMargin: 14
+
+            spacing: 4
+
+            Text {
+                text: label
+
+                color: "#a3a3ad"
+
+                font.family: montserratMedium.name
+                font.pixelSize: 14
+            }
+
+            Text {
+                text: value
+
+                color: "#f2f2f5"
+
+                font.family: montserratSemiBold.name
+                font.pixelSize: 16
+            }
+        }
+    }
+
+    // ============================================================
+    // WEATHER ROW
+    // ============================================================
+
+    component WeatherListRow: Item {
+        property string label: ""
+        property string value: ""
+
+        width: parent.width
+        height: 47
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 14
+
+            color: "#1d1d23"
+
+            border.width: 1
+            border.color: "#292930"
+        }
+
+        Text {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+
+            anchors.leftMargin: 16
+
+            text: label
+
+            color: "#a7a7b0"
+
+            font.family: montserratRegular.name
+            font.pixelSize: 15
+        }
+
+        Text {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+
+            anchors.rightMargin: 16
+
+            text: value
+
+            color: "#f2f2f5"
+
+            font.family: montserratMedium.name
+            font.pixelSize: 15
+
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideRight
+        }
+    }
+
+    // ============================================================
+    // WEATHER DISMISS AREA
+    // ============================================================
+
+    MouseArea {
+        id: weatherDismissArea
+
+        anchors.fill: parent
+
+        z: 300
+
+        visible: weatherOpen
+        enabled: weatherOpen
+
+        onClicked: {
+            weatherOpen = false
+        }
+    }
+
+    // ============================================================
+    // BOTTOM SYSTEM TASKBAR
+    // ============================================================
+
+    Item {
+        id: systemButtonArea
+
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+
+        anchors.rightMargin: 72
+
+        // Raised slightly so it has its own visual zone and
+        // does not sit directly against the weather area.
+        anchors.bottomMargin: 68
+
+        width: 340
+        height: 60
+
+        z: 500
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 20
+
+            color: "#16161b"
+
+            border.width: 1
+            border.color: "#303039"
+
+            layer.enabled: true
+        }
+
+        Row {
+            id: systemButtons
+
+            anchors.fill: parent
+
+            spacing: 0
+
+            SystemButton {
+                id: settingsSystemButton
+
+                iconType: "settings"
+                controllerIndex: 5
+            }
+
+            SystemButton {
+                id: bluetoothSystemButton
+
+                iconType: "bluetooth"
+                controllerIndex: 6
+            }
+
+            SystemButton {
+                id: wifiSystemButton
+
+                iconType: "wifi"
+                controllerIndex: 7
+            }
+
+            SystemButton {
+                id: powerSystemButton
+
+                iconType: "power"
+                controllerIndex: 8
+            }
+        }
+    }
+
+    // ============================================================
+    // BLUETOOTH PANEL
+    // ============================================================
+
+    Item {
+        id: bluetoothMenu
+
+        anchors.right: systemButtonArea.right
+        anchors.bottom: systemButtonArea.top
+
+        anchors.bottomMargin: 16
+
+        width: 450
+        height: 590
+
+        z: 400
+
+        visible: true
+        enabled: bluetoothOpen
+
+        opacity: bluetoothOpen ? 1 : 0
+        scale: bluetoothOpen ? 1 : 0.96
+
+        transformOrigin: Item.BottomRight
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: bluetoothOpen ? 260 : 220
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: bluetoothOpen ? 380 : 260
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 28
+
+            color: "#16161b"
+
+            border.width: 1
+            border.color: "#555560"
+        }
+
+        Item {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+
+            anchors.leftMargin: 26
+            anchors.rightMargin: 22
+            anchors.topMargin: 20
+
+            height: 46
+
+            Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+
+                text: "Bluetooth"
+
+                color: "white"
+
+                font.family: montserratSemiBold.name
+                font.pixelSize: 22
+            }
+
+            PanelCloseButton {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+
+                focused:
+                controllerActive &&
+                bluetoothControllerFocus === 0
+
+                onClicked:
+                bluetoothOpen = false
+            }
+        }
+
+        PanelOption {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+
+            anchors.leftMargin: 26
+            anchors.rightMargin: 26
+            anchors.topMargin: 78
+
+            height: 58
+
+            focused:
+            controllerActive &&
+            bluetoothControllerFocus === 1
+
+            title: "Bluetooth"
+
+            subtitle:
+            typeof bluetoothManager !== "undefined" &&
+            bluetoothManager.powered
+            ? "On"
+            : "Off"
+
+            onClicked:
+            if (typeof bluetoothManager !== "undefined")
+                bluetoothManager.togglePowered()
+        }
+
+        Flickable {
+            id: bluetoothDeviceFlickable
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+
+            anchors.leftMargin: 20
+            anchors.rightMargin: 20
+            anchors.topMargin: 151
+            anchors.bottomMargin: 88
+
+            clip: true
+
+            contentWidth: width
+            contentHeight: bluetoothDeviceColumn.implicitHeight
+
+            boundsBehavior: Flickable.StopAtBounds
+
+            Behavior on contentY {
+                NumberAnimation {
+                    duration: 220
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Column {
+                id: bluetoothDeviceColumn
+
+                width: parent.width
+                spacing: 9
+
+                Text {
+                    width: parent.width
+                    height: 24
+
+                    text: "Connected"
+
+                    color: "#a4a4ae"
+
+                    font.family: montserratMedium.name
+                    font.pixelSize: 14
+                }
+
+                Repeater {
+                    id: bluetoothConnectedRepeater
+
+                    model:
+                    typeof bluetoothManager !== "undefined"
+                    ? bluetoothManager.devices
+                    : null
+
+                    delegate: BluetoothDeviceRow {
+                        width: bluetoothDeviceColumn.width - 8
+                        x: 4
+
+                        deviceName: model.name
+                        deviceConnected: model.connected
+                        devicePaired: model.paired
+                        deviceAddress: model.address
+
+                        section: "connected"
+
+                        visible:
+                        deviceConnected &&
+                        window.bluetoothUniqueAddress(
+                            bluetoothConnectedRepeater,
+                            index
+                        )
+
+                        height: visible ? 58 : 0
+
+                        controllerFocused:
+                        window.controllerActive &&
+                        window.bluetoothOpen &&
+                        window.bluetoothControllerFocus ===
+                        2 +
+                        window.bluetoothRowFocus(
+                            "connected",
+                            index,
+                            bluetoothConnectedRepeater
+                        )
+                    }
+                }
+
+                Item {
+                    width: parent.width
+                    height:
+                    window.bluetoothSectionCount(
+                        bluetoothConnectedRepeater,
+                        "connected"
+                    ) === 0
+                    ? 42
+                    : 0
+
+                    visible: height > 0
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        text: "No devices found"
+
+                        color: "#777781"
+
+                        font.family: montserratRegular.name
+                        font.pixelSize: 13
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    height: 24
+
+                    text: "Available"
+
+                    color: "#a4a4ae"
+
+                    font.family: montserratMedium.name
+                    font.pixelSize: 14
+                }
+
+                Repeater {
+                    id: bluetoothAvailableRepeater
+
+                    model:
+                    typeof bluetoothManager !== "undefined"
+                    ? bluetoothManager.devices
+                    : null
+
+                    delegate: BluetoothDeviceRow {
+                        width: bluetoothDeviceColumn.width - 8
+                        x: 4
+
+                        deviceName: model.name
+                        deviceConnected: model.connected
+                        devicePaired: model.paired
+                        deviceAddress: model.address
+
+                        section: "available"
+
+                        visible:
+                        !deviceConnected &&
+                        !devicePaired &&
+                        window.bluetoothUniqueAddress(
+                            bluetoothAvailableRepeater,
+                            index
+                        )
+
+                        height: visible ? 58 : 0
+
+                        controllerFocused:
+                        window.controllerActive &&
+                        window.bluetoothOpen &&
+                        window.bluetoothControllerFocus ===
+                        2 +
+                        window.bluetoothSectionCount(
+                            bluetoothConnectedRepeater,
+                            "connected"
+                        ) +
+                        window.bluetoothRowFocus(
+                            "available",
+                            index,
+                            bluetoothAvailableRepeater
+                        )
+                    }
+                }
+
+                Item {
+                    width: parent.width
+                    height:
+                    window.bluetoothSectionCount(
+                        bluetoothAvailableRepeater,
+                        "available"
+                    ) === 0
+                    ? 42
+                    : 0
+
+                    visible: height > 0
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        text: "No devices found"
+
+                        color: "#777781"
+
+                        font.family: montserratRegular.name
+                        font.pixelSize: 13
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    height: 24
+
+                    text: "Paired"
+
+                    color: "#a4a4ae"
+
+                    font.family: montserratMedium.name
+                    font.pixelSize: 14
+                }
+
+                Repeater {
+                    id: bluetoothPairedRepeater
+
+                    model:
+                    typeof bluetoothManager !== "undefined"
+                    ? bluetoothManager.devices
+                    : null
+
+                    delegate: BluetoothDeviceRow {
+                        width: bluetoothDeviceColumn.width - 8
+                        x: 4
+
+                        deviceName: model.name
+                        deviceConnected: model.connected
+                        devicePaired: model.paired
+                        deviceAddress: model.address
+
+                        section: "paired"
+
+                        visible:
+                        devicePaired &&
+                        !deviceConnected &&
+                        window.bluetoothUniqueAddress(
+                            bluetoothPairedRepeater,
+                            index
+                        )
+
+                        height: visible ? 58 : 0
+
+                        controllerFocused:
+                        window.controllerActive &&
+                        window.bluetoothOpen &&
+                        window.bluetoothControllerFocus ===
+                        2 +
+                        window.bluetoothSectionCount(
+                            bluetoothConnectedRepeater,
+                            "connected"
+                        ) +
+                        window.bluetoothSectionCount(
+                            bluetoothAvailableRepeater,
+                            "available"
+                        ) +
+                        window.bluetoothRowFocus(
+                            "paired",
+                            index,
+                            bluetoothPairedRepeater
+                        )
+                    }
+                }
+
+                Item {
+                    width: parent.width
+                    height:
+                    window.bluetoothSectionCount(
+                        bluetoothPairedRepeater,
+                        "paired"
+                    ) === 0
+                    ? 42
+                    : 0
+
+                    visible: height > 0
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        text: "No devices found"
+
+                        color: "#777781"
+
+                        font.family: montserratRegular.name
+                        font.pixelSize: 13
+                    }
+                }
+            }
+        }
+
+        PanelAction {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+
+            anchors.leftMargin: 26
+            anchors.rightMargin: 26
+            anchors.bottomMargin: 20
+
+            height: 52
+
+            focused:
+            controllerActive &&
+            bluetoothControllerFocus ===
+            bluetoothVisibleCount() + 2
+
+            title:
+            typeof bluetoothManager !== "undefined" &&
+            bluetoothManager.discovering
+            ? "Searching..."
+            : "Search for devices"
+
+            enabledState:
+            typeof bluetoothManager !== "undefined" &&
+            bluetoothManager.powered
+
+            onClicked: {
+                if (typeof bluetoothManager !== "undefined" &&
+                    bluetoothManager.powered) {
+
+                    bluetoothManager.startDiscovery()
+                    }
+            }
+        }
+    }
+
+    // ============================================================
+    // BLUETOOTH DEVICE ROW
+    // ============================================================
+
+    component BluetoothDeviceRow: Item {
+        property string deviceName: ""
+        property bool deviceConnected: false
+        property bool devicePaired: false
+        property string deviceAddress: ""
+
+        property string section: ""
+
+        property bool controllerFocused: false
+        property bool hovered: false
+
+        signal clicked()
+
+        function activate() {
+            clicked()
+        }
+
+        width: parent ? parent.width : 0
+
+        Rectangle {
+            anchors.fill: parent
+
+            anchors.leftMargin: 2
+            anchors.rightMargin: 2
+
+            radius: 15
+
+            color:
+            hovered || controllerFocused
+            ? "#29292f"
+            : "#17171d"
+
+            border.width: 1
+
+            border.color:
+            hovered || controllerFocused
+            ? "#5a5a66"
+            : "#292930"
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+
+            Behavior on border.color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+        }
+
+        Canvas {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+
+            anchors.leftMargin: 17
+
+            width: 22
+            height: 26
+
+            onPaint: {
+                var ctx = getContext("2d")
+
+                ctx.clearRect(0, 0, width, height)
+
+                ctx.strokeStyle = "#f2f2f5"
+                ctx.lineWidth = 2.1
+                ctx.lineCap = "round"
+                ctx.lineJoin = "round"
+
+                var cx = width / 2
+
+                ctx.beginPath()
+
+                ctx.moveTo(cx, 2)
+                ctx.lineTo(cx, 24)
+
+                ctx.moveTo(cx, 2)
+                ctx.lineTo(18, 7)
+                ctx.lineTo(6, 17)
+
+                ctx.moveTo(cx, 24)
+                ctx.lineTo(18, 19)
+                ctx.lineTo(6, 9)
+
+                ctx.stroke()
+            }
+        }
+
+        Column {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+
+            anchors.leftMargin: 50
+            anchors.rightMargin:
+            deviceConnected
+            ? 42
+            : 16
+
+            spacing: 2
+
+            Text {
+                width: parent.width
+
+                text:
+                deviceName.length > 0
+                ? deviceName
+                : deviceAddress
+
+                color: "#f2f2f5"
+
+                font.family: montserratMedium.name
+                font.pixelSize: 14
+
+                elide: Text.ElideRight
+            }
+
+            Text {
+                text:
+                deviceConnected
+                ? "Connected"
+                : devicePaired
+                ? "Paired"
+                : "Available"
+
+                color:
+                deviceConnected
+                ? "#c8c8cf"
+                : "#81818b"
+
+                font.family: montserratRegular.name
+                font.pixelSize: 12
+            }
+        }
+
+        Rectangle {
+            visible: deviceConnected
+
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+
+            anchors.rightMargin: 18
+
+            width: 8
+            height: 8
+
+            radius: 4
+
+            color: "#f2f2f5"
+        }
+
+        MouseArea {
+            anchors.fill: parent
+
+            hoverEnabled: true
+
+            onEntered:
+            parent.hovered = true
+
+            onExited:
+            parent.hovered = false
+
+            onClicked: {
+                if (typeof bluetoothManager !== "undefined")
+                    bluetoothManager.toggleDeviceConnection(
+                        parent.deviceAddress
+                    )
+            }
+        }
+    }
+
+    // ============================================================
+    // WI-FI PANEL
+    // ============================================================
+
+    Item {
+        id: wifiPanel
+
+        anchors.right: systemButtonArea.right
+        anchors.bottom: systemButtonArea.top
+
+        anchors.bottomMargin: 16
+
+        width: 450
+        height: 550
+
+        z: 400
+
+        visible: true
+        enabled: wifiOpen
+
+        opacity: wifiOpen ? 1 : 0
+        scale: wifiOpen ? 1 : 0.96
+
+        transformOrigin: Item.BottomRight
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: wifiOpen ? 260 : 220
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: wifiOpen ? 380 : 260
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 28
+
+            color: "#16161b"
+
+            border.width: 1
+            border.color: "#555560"
+        }
+
+        Item {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+
+            anchors.leftMargin: 26
+            anchors.rightMargin: 22
+            anchors.topMargin: 20
+
+            height: 46
+
+            Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+
+                text: "Wi-Fi"
+
+                color: "white"
+
+                font.family: montserratSemiBold.name
+                font.pixelSize: 22
+            }
+
+            PanelCloseButton {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+
+                focused:
+                controllerActive &&
+                wifiControllerFocus === 0
+
+                onClicked:
+                wifiOpen = false
+            }
+        }
+
+        PanelOption {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+
+            anchors.leftMargin: 26
+            anchors.rightMargin: 26
+            anchors.topMargin: 78
+
+            height: 58
+
+            focused:
+            controllerActive &&
+            wifiControllerFocus === 1
+
+            title: "Wi-Fi"
+
+            subtitle:
+            typeof systemManager !== "undefined" &&
+            systemManager.wifiEnabled
+            ? "Enabled"
+            : "Disabled"
+
+            onClicked:
+            if (typeof systemManager !== "undefined")
+                systemManager.toggleWifi()
+        }
+
+        InfoOption {
+            id: ethernetOption
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+
+            anchors.leftMargin: 26
+            anchors.rightMargin: 26
+            anchors.topMargin: 150
+
+            height: 58
+
+            focused:
+            controllerActive &&
+            wifiOpen &&
+            wifiControllerFocus === 2
+
+            title: "Ethernet"
+
+            subtitle:
+            typeof systemManager !== "undefined" &&
+            systemManager.ethernetConnected
+            ? systemManager.ethernetConnection !== ""
+            ? systemManager.ethernetConnection
+            : "Connected"
+            : "Disconnected"
+        }
+
+        Text {
+            anchors.left: parent.left
+            anchors.top: parent.top
+
+            anchors.leftMargin: 26
+            anchors.topMargin: 224
+
+            text:
+            typeof systemManager !== "undefined" &&
+            systemManager.wifiConnection !== ""
+            ? "Connected to " +
+            systemManager.wifiConnection
+            : "Available networks"
+
+            color: "#a8a8b2"
+
+            font.family: montserratRegular.name
+            font.pixelSize: 15
+        }
+
+        Flickable {
+            id: wifiNetworkFlickable
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+
+            anchors.leftMargin: 20
+            anchors.rightMargin: 20
+            anchors.topMargin: 253
+            anchors.bottomMargin: 20
+
+            clip: true
+
+            contentWidth: width
+            contentHeight: wifiNetworkColumn.implicitHeight
+
+            boundsBehavior: Flickable.StopAtBounds
+
+            Behavior on contentY {
+                NumberAnimation {
+                    duration: 220
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Column {
+                id: wifiNetworkColumn
+
+                width: parent.width
+                spacing: 9
+
+                Repeater {
+                    id: wifiNetworkRepeater
+
+                    model:
+                    typeof systemManager !== "undefined"
+                    ? systemManager.wifiNetworks
+                    : null
+
+                    delegate: WifiNetworkRow {
+                        width: wifiNetworkColumn.width - 8
+                        x: 4
+                        height: 58
+
+                        networkName: modelData
+
+                        connected:
+                        typeof systemManager !== "undefined" &&
+                        modelData === systemManager.wifiConnection
+
+                        controllerFocused:
+                        window.controllerActive &&
+                        window.wifiOpen &&
+                        window.wifiControllerFocus ===
+                        index + 3
+
+                        onClicked:
+                        if (typeof systemManager !== "undefined")
+                            systemManager.connectWifi(modelData)
+                    }
+                }
+
+                Item {
+                    width: parent.width
+                    height:
+                    wifiNetworkRepeater.count === 0
+                    ? 42
+                    : 0
+
+                    visible: height > 0
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        text:
+                        typeof systemManager !== "undefined" &&
+                        !systemManager.wifiEnabled
+                        ? "Wi-Fi is off"
+                        : "No networks found"
+
+                        color: "#7f7f89"
+
+                        font.family: montserratRegular.name
+                        font.pixelSize: 15
+                    }
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    // INFO OPTION
+    // ============================================================
+
+    component InfoOption: Item {
+        property string title: ""
+        property string subtitle: ""
+
+        property bool hovered: false
+        property bool focused: false
+
+        width: parent ? parent.width : 0
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 16
+
+            color:
+            hovered || focused
+            ? "#29292f"
+            : "#17171d"
+
+            border.width: 1
+
+            border.color:
+            hovered || focused
+            ? "#5a5a66"
+            : "#292930"
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+
+            Behavior on border.color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+        }
+
+        Column {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+
+            anchors.leftMargin: 16
+            anchors.rightMargin: 16
+
+            spacing: 2
+
+            Text {
+                text: title
+
+                color: "#f2f2f5"
+
+                font.family: montserratMedium.name
+                font.pixelSize: 15
+            }
+
+            Text {
+                width: parent.width
+
+                text: subtitle
+
+                color:
+                hovered || focused
+                ? "#c9c9d1"
+                : "#92929c"
+
+                font.family: montserratRegular.name
+                font.pixelSize: 13
+
+                elide: Text.ElideRight
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+
+            hoverEnabled: true
+
+            onEntered:
+            parent.hovered = true
+
+            onExited:
+            parent.hovered = false
+        }
+    }
+
+    // ============================================================
+    // WI-FI NETWORK ROW
+    // ============================================================
+
+    component WifiNetworkRow: Item {
+        property string networkName: ""
+        property bool connected: false
+        property bool controllerFocused: false
+        property bool hovered: false
+
+        signal clicked()
+
+        Rectangle {
+            anchors.fill: parent
+
+            anchors.leftMargin: 2
+            anchors.rightMargin: 2
+
+            radius: 15
+
+            color:
+            hovered || controllerFocused
+            ? "#29292f"
+            : "#1d1d23"
+
+            border.width: 1
+
+            border.color:
+            hovered || controllerFocused
+            ? "#5a5a66"
+            : "#292930"
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+
+            Behavior on border.color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+        }
+
+        Text {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+
+            anchors.leftMargin: 16
+
+            width: parent.width - 130
+
+            text: networkName
+
+            color: "#f2f2f5"
+
+            font.family: montserratRegular.name
+            font.pixelSize: 16
+
+            elide: Text.ElideRight
+        }
+
+        Text {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+
+            anchors.rightMargin: 16
+
+            text:
+            connected
+            ? "Connected"
+            : "Connect"
+
+            color:
+            connected
+            ? "#8be28b"
+            : hovered || controllerFocused
+            ? "#f2f2f5"
+            : "#9999a3"
+
+            font.family: montserratMedium.name
+            font.pixelSize: 14
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+
+            hoverEnabled: true
+
+            onEntered:
+            parent.hovered = true
+
+            onExited:
+            parent.hovered = false
+
+            onClicked:
+            parent.clicked()
+        }
+    }
+
+    // ============================================================
+    // POWER PANEL
+    // ============================================================
+
+    Item {
+        id: powerPanel
+
+        anchors.right: systemButtonArea.right
+        anchors.bottom: systemButtonArea.top
+
+        anchors.bottomMargin: 16
+
+        width: 450
+        height: 560
+
+        z: 400
+
+        visible: true
+        enabled: powerOpen
+
+        opacity: powerOpen ? 1 : 0
+        scale: powerOpen ? 1 : 0.96
+
+        transformOrigin: Item.BottomRight
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: powerOpen ? 260 : 220
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: powerOpen ? 380 : 260
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 28
+
+            color: "#16161b"
+
+            border.width: 1
+            border.color: "#555560"
+        }
+
+        Item {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+
+            anchors.leftMargin: 26
+            anchors.rightMargin: 22
+            anchors.topMargin: 20
+
+            height: 46
+
+            Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+
+                text: "Power"
+
+                color: "white"
+
+                font.family: montserratSemiBold.name
+                font.pixelSize: 22
+            }
+
+            PanelCloseButton {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+
+                focused:
+                controllerActive &&
+                powerControllerFocus === 0
+
+                onClicked:
+                powerOpen = false
+            }
+        }
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+
+            anchors.topMargin: 70
+            anchors.leftMargin: 20
+            anchors.rightMargin: 20
+
+            height: 84
+
+            radius: 18
+
+            color: "#1d1d23"
+
+            Text {
+                anchors.left: parent.left
+                anchors.top: parent.top
+
+                anchors.leftMargin: 16
+                anchors.topMargin: 13
+
+                text: "Recommendation"
+
+                color: "#f2f2f5"
+
+                font.family: montserratMedium.name
+                font.pixelSize: 14
+            }
+
+            Text {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                anchors.bottomMargin: 13
+
+                text:
+                "Shut down overnight. Use Sleep during the day " +
+                "when you want to resume quickly."
+
+                color: "#a8a8b2"
+
+                font.family: montserratRegular.name
+                font.pixelSize: 13
+
+                wrapMode: Text.WordWrap
+            }
+        }
+
+        Column {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+
+            anchors.leftMargin: 20
+            anchors.rightMargin: 20
+            anchors.topMargin: 170
+
+            spacing: 8
+
+            PowerOption {
+                title: "Lock"
+
+                description:
+                "Locks Stratara while keeping your session running."
+
+                focused:
+                controllerActive &&
+                powerControllerFocus === 1
+
+                actionName: "lock"
+
+                onClicked:
+                performPowerAction(actionName)
+            }
+
+            PowerOption {
+                title: "Log out"
+
+                description:
+                "Ends your current session and returns to the login screen."
+
+                focused:
+                controllerActive &&
+                powerControllerFocus === 2
+
+                actionName: "logout"
+
+                onClicked:
+                performPowerAction(actionName)
+            }
+
+            PowerOption {
+                title: "Sleep"
+
+                description:
+                "Uses low power and lets you resume quickly."
+
+                focused:
+                controllerActive &&
+                powerControllerFocus === 3
+
+                actionName: "sleep"
+
+                onClicked:
+                performPowerAction(actionName)
+            }
+
+            PowerOption {
+                title: "Restart"
+
+                description:
+                "Restarts Stratara and starts a fresh session."
+
+                focused:
+                controllerActive &&
+                powerControllerFocus === 4
+
+                actionName: "restart"
+
+                onClicked:
+                performPowerAction(actionName)
+            }
+
+            PowerOption {
+                title: "Shut down"
+
+                description:
+                "Fully powers off the PC."
+
+                focused:
+                controllerActive &&
+                powerControllerFocus === 5
+
+                actionName: "shutdown"
+
+                onClicked:
+                performPowerAction(actionName)
+            }
+        }
+
+        Text {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+
+            anchors.leftMargin: 24
+            anchors.rightMargin: 24
+            anchors.bottomMargin: 16
+
+            text:
+            [
+                "Close the Power panel.",
+                "Lock — keeps your session running.",
+                "Log out — returns to the login screen.",
+                "Sleep — lets you resume quickly.",
+                "Restart — starts a fresh session.",
+                "Shut down — fully powers off the PC."
+            ][powerControllerFocus]
+
+            color: "#8f8f99"
+
+            font.family: montserratRegular.name
+            font.pixelSize: 13
+
+            wrapMode: Text.WordWrap
+        }
+    }
+
+    // ============================================================
+    // PANEL CLOSE BUTTON
+    // ============================================================
+
+    component PanelCloseButton: Item {
+        property bool focused: false
+        property bool hovered: false
+
+        signal clicked()
+
+        width: 42
+        height: 42
+
+        scale:
+        hovered || focused
+        ? 1.04
+        : 1.0
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: 120
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 21
+
+            color:
+            hovered || focused
+            ? "#2a2a31"
+            : "#1d1d23"
+
+            border.width:
+            focused
+            ? 1
+            : 0
+
+            border.color: "#5a5a66"
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+        }
+
+        Text {
+            anchors.centerIn: parent
+
+            text: "×"
+
+            color: "#e8e8ed"
+
+            font.family: montserratRegular.name
+            font.pixelSize: 26
+        }
+
+        MouseArea {
+            anchors.fill: parent
+
+            hoverEnabled: true
+
+            onEntered:
+            parent.hovered = true
+
+            onExited:
+            parent.hovered = false
+
+            onClicked:
+            parent.clicked()
+        }
+    }
+
+    // ============================================================
+    // PANEL OPTION
+    // ============================================================
+
+    component PanelOption: Item {
+        property string title: ""
+        property string subtitle: ""
+
+        property bool focused: false
+        property bool hovered: false
+
+        property bool enabledState: true
+
+        signal clicked()
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 16
+
+            color:
+            hovered || focused
+            ? "#29292f"
+            : "#17171d"
+
+            border.width: 1
+
+            border.color:
+            hovered || focused
+            ? "#5a5a66"
+            : "#292930"
+
+            opacity:
+            enabledState
+            ? 1.0
+            : 0.65
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+
+            Behavior on border.color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+        }
+
+        Column {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+
+            anchors.leftMargin: 16
+            anchors.rightMargin: 16
+
+            spacing: 2
+
+            Text {
+                text: title
+
+                color: "#f2f2f5"
+
+                font.family: montserratMedium.name
+                font.pixelSize: 15
+            }
+
+            Text {
+                width: parent.width
+
+                text: subtitle
+
+                color:
+                hovered || focused
+                ? "#c9c9d1"
+                : "#92929c"
+
+                font.family: montserratRegular.name
+                font.pixelSize: 13
+
+                elide: Text.ElideRight
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+
+            hoverEnabled: true
+
+            enabled: parent.enabledState
+
+            onEntered:
+            parent.hovered = true
+
+            onExited:
+            parent.hovered = false
+
+            onClicked:
+            parent.clicked()
+        }
+    }
+
+    // ============================================================
+    // PANEL ACTION
+    // ============================================================
+
+    component PanelAction: Item {
+        property string title: ""
+
+        property bool focused: false
+        property bool hovered: false
+        property bool enabledState: true
+
+        signal clicked()
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 16
+
+            color:
+            hovered || focused
+            ? "#29292f"
+            : "#1b1b21"
+
+            border.width: 1
+
+            border.color:
+            hovered || focused
+            ? "#5a5a66"
+            : "#2b2b32"
+
+            opacity:
+            enabledState
+            ? 1.0
+            : 0.65
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+
+            Behavior on border.color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+        }
+
+        Text {
+            anchors.centerIn: parent
+
+            text: title
+
+            color:
+            enabledState
+            ? "#f2f2f5"
+            : "#6d6d76"
+
+            font.family: montserratMedium.name
+            font.pixelSize: 15
+        }
+
+        MouseArea {
+            anchors.fill: parent
+
+            hoverEnabled: true
+
+            enabled: parent.enabledState
+
+            onEntered:
+            parent.hovered = true
+
+            onExited:
+            parent.hovered = false
+
+            onClicked:
+            parent.clicked()
+        }
+    }
+
+    // ============================================================
+    // POWER OPTION
+    // ============================================================
+
+    component PowerOption: Item {
+        property string title: ""
+        property string description: ""
+        property string actionName: ""
+
+        property bool focused: false
+        property bool hovered: false
+
+        signal clicked()
+
+        width: parent.width
+        height: 58
+
+        scale:
+        hovered || focused
+        ? 1.015
+        : 1.0
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: 120
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 14
+
+            color:
+            hovered || focused
+            ? "#29292f"
+            : "#1d1d23"
+
+            border.width: 1
+
+            border.color:
+            hovered || focused
+            ? "#5a5a66"
+            : "#292930"
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+
+            Behavior on border.color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+        }
+
+        Column {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+
+            anchors.leftMargin: 16
+
+            spacing: 2
+
+            Text {
+                text: title
+
+                color: "#f2f2f5"
+
+                font.family: montserratMedium.name
+                font.pixelSize: 16
+            }
+
+            Text {
+                width: parent.parent.width - 32
+
+                text: description
+
+                color: "#85858f"
+
+                font.family: montserratRegular.name
+                font.pixelSize: 11
+
+                elide: Text.ElideRight
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+
+            hoverEnabled: true
+
+            onEntered:
+            parent.hovered = true
+
+            onExited:
+            parent.hovered = false
+
+            onClicked:
+            parent.clicked()
+        }
+    }
+
+    // ============================================================
+    // GLASS CARD
+    // ============================================================
+
+    component GlassCard: Item {
+        property string title: ""
+        property string subtitle: ""
+        property int controllerIndex: -1
+
+        property bool hovered: false
+
+        property bool controllerFocused:
+        window.controllerActive &&
+        window.controllerFocusIndex === controllerIndex
+
+        signal cardClicked()
+
+        scale:
+        hovered || controllerFocused
+        ? 1.035
+        : 1.0
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: 120
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 26
+
+            color: "#101014"
+
+            opacity:
+            hovered || controllerFocused
+            ? 0.98
+            : 0.90
+
+            border.width: 1
+
+            border.color:
+            hovered || controllerFocused
+            ? "#3b3b44"
+            : "#29292f"
+        }
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 26
+
+            color: "#29292f"
+
+            opacity:
+            hovered || controllerFocused
+            ? 0.32
+            : 0
+        }
+
+        Rectangle {
+            anchors.fill: parent
+
+            radius: 26
+
             color: "transparent"
 
             border.width: 1
             border.color: "#ffffff"
 
             opacity:
-            (hovered || controllerFocused)
+            hovered || controllerFocused
             ? 0.085
             : 0.045
         }
@@ -506,17 +3479,16 @@ ApplicationWindow {
             spacing: 7
 
             Text {
-                text: card.title
+                text: title
 
                 color: "white"
 
                 font.family: montserratSemiBold.name
                 font.pixelSize: 25
-                font.weight: Font.Normal
             }
 
             Text {
-                text: card.subtitle
+                text: subtitle
 
                 color: "#a4a4ae"
 
@@ -530,1057 +3502,119 @@ ApplicationWindow {
 
             hoverEnabled: true
 
-            onEntered: card.hovered = true
-            onExited: card.hovered = false
-
-            onClicked: card.cardClicked()
-        }
-    }
-
-    /*
-     * WEATHER CARD
-     */
-
-    component WeatherCard: Item {
-        id: weather
-
-        property bool hovered: false
-
-        property bool controllerFocused:
-        window.controllerActive &&
-        window.controllerFocusIndex === 4
-
-        scale:
-        (hovered ||
-        window.weatherOpen ||
-        controllerFocused)
-        ? 1.06
-        : 1.0
-
-        Behavior on scale {
-            NumberAnimation {
-                duration: 120
-                easing.type: Easing.OutCubic
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 26
-            color: "#101014"
-
-            opacity:
-            (hovered ||
-            window.weatherOpen ||
-            controllerFocused)
-            ? 0.98
-            : 0.92
-
-            border.width: 1
-
-            border.color:
-            (hovered ||
-            window.weatherOpen ||
-            controllerFocused)
-            ? "#3b3b44"
-            : "#29292f"
-        }
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 26
-            color: "#29292f"
-
-            opacity:
-            (hovered ||
-            window.weatherOpen ||
-            controllerFocused)
-            ? 0.32
-            : 0.0
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: 120
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 26
-            color: "transparent"
-
-            border.width: 1
-            border.color: "#ffffff"
-
-            opacity:
-            (hovered ||
-            window.weatherOpen ||
-            controllerFocused)
-            ? 0.085
-            : 0.045
-        }
-
-        MouseArea {
-            anchors.fill: parent
-
-            hoverEnabled: true
-
-            onEntered: weather.hovered = true
-            onExited: weather.hovered = false
-
-            onClicked: {
-                window.weatherOpen = !window.weatherOpen
-                window.bluetoothOpen = false
-            }
-        }
-
-        Column {
-            anchors.left: parent.left
-            anchors.top: parent.top
-
-            anchors.leftMargin: 28
-            anchors.topMargin: 24
-
-            spacing: 7
-
-            Text {
-                text: window.weatherLocation
-
-                color: "#a8a8b1"
-
-                font.family: montserratRegular.name
-                font.pixelSize: 15
-            }
-
-            Text {
-                text: window.weatherTemperature
-
-                color: "white"
-
-                font.family: montserratSemiBold.name
-                font.pixelSize: 43
-                font.weight: Font.Normal
-            }
-
-            Text {
-                text: window.weatherCondition
-
-                color: "#b3b3bc"
-
-                font.family: montserratRegular.name
-                font.pixelSize: 16
-            }
-        }
-
-        Row {
-            anchors.left: parent.left
-            anchors.bottom: parent.bottom
-
-            anchors.leftMargin: 28
-            anchors.bottomMargin: 24
-
-            spacing: 14
-
-            Text {
-                text: window.weatherHigh + " / " + window.weatherLow
-
-                color: "#b1b1ba"
-
-                font.family: montserratRegular.name
-                font.pixelSize: 15
-            }
-        }
-
-        Item {
-            id: weatherMenu
-
-            anchors.left: parent.left
-            anchors.bottom: parent.top
-
-            width: parent.width
-            height: window.weatherOpen ? 360 : 0
-
-            clip: true
-            z: 100
-
-            Behavior on height {
-                NumberAnimation {
-                    duration: window.weatherOpen ? 380 : 220
-                    easing.type: Easing.OutCubic
-                }
-            }
-
-            Rectangle {
-                anchors.fill: parent
-
-                radius: 26
-                color: "#101014"
-
-                opacity:
-                window.weatherOpen
-                ? 0.98
-                : 0.0
-
-                border.width: 1
-                border.color: "#3b3b44"
-            }
-
-            Rectangle {
-                anchors.fill: parent
-
-                radius: 26
-                color: "#29292f"
-
-                opacity:
-                window.weatherOpen
-                ? 0.32
-                : 0.0
-            }
-
-            Rectangle {
-                anchors.fill: parent
-
-                radius: 26
-                color: "transparent"
-
-                border.width: 1
-                border.color: "#ffffff"
-
-                opacity:
-                window.weatherOpen
-                ? 0.085
-                : 0.0
-            }
-
-            Column {
-                anchors.fill: parent
-
-                anchors.leftMargin: 28
-                anchors.rightMargin: 28
-                anchors.topMargin: 24
-                anchors.bottomMargin: 24
-
-                spacing: 15
-
-                Item {
-                    width: parent.width
-                    height: 46
-
-                    Text {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-
-                        text: "Weather"
-
-                        color: "white"
-
-                        font.family: montserratSemiBold.name
-                        font.pixelSize: 21
-                    }
-
-                    Rectangle {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-
-                        width: 42
-                        height: 42
-
-                        radius: 21
-
-                        color:
-                        closeMouse.containsMouse
-                        ? "#2a2a31"
-                        : "#1d1d23"
-
-                        Text {
-                            anchors.centerIn: parent
-
-                            text: "×"
-
-                            color: "#e8e8ed"
-
-                            font.family: montserratRegular.name
-                            font.pixelSize: 26
-                        }
-
-                        MouseArea {
-                            id: closeMouse
-
-                            anchors.fill: parent
-
-                            hoverEnabled: true
-
-                            onClicked:
-                            window.weatherOpen = false
-                        }
-                    }
-                }
-
-                WeatherListRow {
-                    label: "Rain"
-                    value: window.weatherRain
-                }
-
-                WeatherListRow {
-                    label: "Wind"
-                    value: window.weatherWind
-                }
-
-                WeatherListRow {
-                    label: "Humidity"
-                    value: window.weatherHumidity
-                }
-            }
-        }
-    }
-
-    /*
-     * WEATHER LIST ROW
-     */
-
-    component WeatherListRow: Item {
-        id: row
-
-        property string label: ""
-        property string value: ""
-
-        width: parent.width
-        height: 52
-
-        Text {
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-
-            text: row.label
-
-            color: "#a7a7b0"
-
-            font.family: montserratRegular.name
-            font.pixelSize: 17
-        }
-
-        Text {
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-
-            text: row.value
-
-            color: "white"
-
-            font.family: montserratRegular.name
-            font.pixelSize: 17
-        }
-    }
-
-    /*
-     * BLUETOOTH POPUP
-     *
-     * Positioned directly from the system button row.
-     */
-
-    Item {
-        id: bluetoothMenu
-
-        x:
-        systemButtons.x +
-        bluetoothSystemButton.x +
-        (bluetoothSystemButton.width / 2) -
-        (width / 2)
-
-        y:
-        systemButtons.y -
-        height -
-        18
-
-        width: 430
-        height: window.bluetoothOpen ? 560 : 0
-
-        clip: true
-        z: 200
-
-        /*
-         * Same animation timing as Weather:
-         * 380 ms opening
-         * 220 ms closing
-         */
-
-        Behavior on height {
-            NumberAnimation {
-                duration: window.bluetoothOpen ? 380 : 220
-                easing.type: Easing.OutCubic
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 26
-            color: "#101014"
-
-            opacity:
-            window.bluetoothOpen
-            ? 0.985
-            : 0.0
-
-            border.width: 1
-            border.color: "#3b3b44"
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: window.bluetoothOpen ? 380 : 220
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 26
-            color: "#29292f"
-
-            opacity:
-            window.bluetoothOpen
-            ? 0.30
-            : 0.0
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: window.bluetoothOpen ? 380 : 220
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 26
-            color: "transparent"
-
-            border.width: 1
-            border.color: "#ffffff"
-
-            opacity:
-            window.bluetoothOpen
-            ? 0.085
-            : 0.0
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: window.bluetoothOpen ? 380 : 220
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-
-        ColumnLayout {
-            anchors.fill: parent
-
-            anchors.leftMargin: 26
-            anchors.rightMargin: 26
-            anchors.topMargin: 24
-            anchors.bottomMargin: 22
-
-            spacing: 12
-
-            /*
-             * HEADER
-             */
-
-            Item {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 46
-
-                Text {
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    text: "Bluetooth"
-
-                    color: "white"
-
-                    font.family: montserratSemiBold.name
-                    font.pixelSize: 22
-                    font.weight: Font.Normal
-                }
-
-                Rectangle {
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    width: 42
-                    height: 42
-
-                    radius: 21
-
-                    color:
-                    bluetoothCloseMouse.containsMouse
-                    ? "#2a2a31"
-                    : "#1d1d23"
-
-                    Text {
-                        anchors.centerIn: parent
-
-                        text: "×"
-
-                        color: "#e8e8ed"
-
-                        font.family: montserratRegular.name
-                        font.pixelSize: 26
-                    }
-
-                    MouseArea {
-                        id: bluetoothCloseMouse
-
-                        anchors.fill: parent
-
-                        hoverEnabled: true
-
-                        onClicked:
-                        window.bluetoothOpen = false
-                    }
-                }
-            }
-
-            /*
-             * POWER
-             */
-
-            Item {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 58
-
-                Rectangle {
-                    anchors.fill: parent
-
-                    radius: 16
-
-                    color:
-                    bluetoothPowerMouse.containsMouse
-                    ? "#202027"
-                    : "#17171d"
-
-                    border.width: 1
-                    border.color: "#292930"
-                }
-
-                Column {
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    anchors.leftMargin: 16
-
-                    spacing: 2
-
-                    Text {
-                        text: "Bluetooth"
-
-                        color: "white"
-
-                        font.family: montserratMedium.name
-                        font.pixelSize: 15
-                    }
-
-                    Text {
-                        text:
-                        (typeof bluetoothManager !== "undefined" &&
-                        bluetoothManager.powered)
-                        ? "On"
-                        : "Off"
-
-                        color:
-                        (typeof bluetoothManager !== "undefined" &&
-                        bluetoothManager.powered)
-                        ? "#bfc0c8"
-                        : "#92929c"
-
-                        font.family: montserratRegular.name
-                        font.pixelSize: 13
-                    }
-                }
-
-                Rectangle {
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    anchors.rightMargin: 14
-
-                    width: 46
-                    height: 26
-
-                    radius: 13
-
-                    color:
-                    (typeof bluetoothManager !== "undefined" &&
-                    bluetoothManager.powered)
-                    ? "#f2f2f5"
-                    : "#303038"
-
-                    Rectangle {
-                        width: 20
-                        height: 20
-
-                        radius: 10
-
-                        anchors.verticalCenter: parent.verticalCenter
-
-                        x:
-                        (typeof bluetoothManager !== "undefined" &&
-                        bluetoothManager.powered)
-                        ? parent.width - width - 3
-                        : 3
-
-                        color:
-                        (typeof bluetoothManager !== "undefined" &&
-                        bluetoothManager.powered)
-                        ? "#101014"
-                        : "#8e8e98"
-
-                        Behavior on x {
-                            NumberAnimation {
-                                duration: 180
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-                    }
-                }
-
-                MouseArea {
-                    id: bluetoothPowerMouse
-
-                    anchors.fill: parent
-
-                    hoverEnabled: true
-
-                    onClicked: {
-                        if (typeof bluetoothManager !== "undefined") {
-                            bluetoothManager.togglePowered()
-                        }
-                    }
-                }
-            }
-
-            /*
-             * DEVICES
-             */
-
-            Text {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 20
-
-                text: "Devices"
-
-                color: "#a4a4ae"
-
-                font.family: montserratMedium.name
-                font.pixelSize: 14
-            }
-
-            ListView {
-                id: bluetoothDeviceList
-
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-
-                spacing: 8
-                clip: true
-
-                boundsBehavior: Flickable.StopAtBounds
-
-                model:
-                typeof bluetoothManager !== "undefined"
-                ? bluetoothManager.devices
-                : null
-
-                delegate: BluetoothDeviceRow {
-                    width: bluetoothDeviceList.width
-                    height: 58
-
-                    deviceName: model.name
-                    connected: model.connected
-                    paired: model.paired
-                    deviceAddress: model.address
-
-                    onClicked: {
-                        if (typeof bluetoothManager !== "undefined") {
-                            bluetoothManager.toggleDeviceConnection(
-                                deviceAddress
-                            )
-                        }
-                    }
-                }
-
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AsNeeded
-
-                    contentItem: Rectangle {
-                        implicitWidth: 5
-                        radius: 2.5
-                        color: "#3b3b44"
-                    }
-
-                    background: Item {}
-                }
-
-                Text {
-                    anchors.centerIn: parent
-
-                    visible:
-                    bluetoothDeviceList.count === 0
-
-                    text:
-                    (typeof bluetoothManager !== "undefined" &&
-                    !bluetoothManager.powered)
-                    ? "Bluetooth is off"
-                    : "No devices found"
-
-                    color: "#7f7f89"
-
-                    font.family: montserratRegular.name
-                    font.pixelSize: 15
-                }
-            }
-
-            /*
-             * SCAN
-             */
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 52
-
-                radius: 16
-
-                color:
-                bluetoothScanMouse.containsMouse
-                ? "#29292f"
-                : "#1b1b21"
-
-                border.width: 1
-
-                border.color:
-                bluetoothScanMouse.containsMouse
-                ? "#41414a"
-                : "#2b2b32"
-
-                Text {
-                    anchors.centerIn: parent
-
-                    text:
-                    (typeof bluetoothManager !== "undefined" &&
-                    bluetoothManager.discovering)
-                    ? "Scanning…"
-                    : "Scan for devices"
-
-                    color:
-                    (typeof bluetoothManager !== "undefined" &&
-                    bluetoothManager.powered)
-                    ? "#f2f2f5"
-                    : "#6d6d76"
-
-                    font.family: montserratMedium.name
-                    font.pixelSize: 15
-                }
-
-                MouseArea {
-                    id: bluetoothScanMouse
-
-                    anchors.fill: parent
-
-                    hoverEnabled: true
-
-                    enabled:
-                    typeof bluetoothManager !== "undefined" &&
-                    bluetoothManager.powered
-
-                    onClicked:
-                    bluetoothManager.startDiscovery()
-                }
-            }
-        }
-    }
-
-    /*
-     * BLUETOOTH DEVICE ROW
-     */
-
-    component BluetoothDeviceRow: Item {
-        id: deviceRow
-
-        property string deviceName: ""
-        property bool connected: false
-        property bool paired: false
-        property string deviceAddress: ""
-
-        signal clicked()
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 16
-
-            color:
-            deviceMouse.containsMouse
-            ? "#24242b"
-            : "#17171d"
-
-            border.width: 1
-
-            border.color:
-            connected
-            ? "#3e3e47"
-            : "#292930"
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: 100
-                }
-            }
-        }
-
-        Canvas {
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-
-            anchors.leftMargin: 16
-
-            width: 20
-            height: 24
-
-            onPaint: {
-                var ctx = getContext("2d")
-
-                ctx.clearRect(0, 0, width, height)
-
-                ctx.strokeStyle = "#f2f2f5"
-                ctx.lineWidth = 1.9
-                ctx.lineCap = "round"
-                ctx.lineJoin = "round"
-
-                var cx = width / 2
-
-                ctx.beginPath()
-
-                ctx.moveTo(cx, 1)
-                ctx.lineTo(cx, 23)
-
-                ctx.moveTo(cx, 1)
-                ctx.lineTo(16, 6)
-                ctx.lineTo(5, 17)
-
-                ctx.moveTo(cx, 23)
-                ctx.lineTo(16, 18)
-                ctx.lineTo(5, 7)
-
-                ctx.stroke()
-            }
-        }
-
-        Column {
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-
-            anchors.leftMargin: 48
-            anchors.rightMargin: connected ? 52 : 16
-
-            spacing: 2
-
-            Text {
-                width: parent.width
-
-                text:
-                deviceRow.deviceName.length > 0
-                ? deviceRow.deviceName
-                : deviceRow.deviceAddress
-
-                color: "white"
-
-                font.family: montserratMedium.name
-                font.pixelSize: 14
-
-                elide: Text.ElideRight
-            }
-
-            Text {
-                text:
-                connected
-                ? "Connected"
-                : paired
-                ? "Paired"
-                : "Available"
-
-                color:
-                connected
-                ? "#c8c8cf"
-                : "#81818b"
-
-                font.family: montserratRegular.name
-                font.pixelSize: 12
-            }
-        }
-
-        Rectangle {
-            visible: connected
-
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-
-            anchors.rightMargin: 16
-
-            width: 8
-            height: 8
-
-            radius: 4
-
-            color: "#f2f2f5"
-        }
-
-        MouseArea {
-            id: deviceMouse
-
-            anchors.fill: parent
-
-            hoverEnabled: true
+            onEntered:
+            parent.hovered = true
+
+            onExited:
+            parent.hovered = false
 
             onClicked:
-            deviceRow.clicked()
+            parent.cardClicked()
         }
     }
 
-    /*
-     * SYSTEM BUTTON
-     */
+    // ============================================================
+    // SYSTEM BUTTON
+    // ============================================================
 
     component SystemButton: Item {
         id: button
 
         property string iconType: ""
+        property int controllerIndex: -1
         property bool hovered: false
 
-        width: 52
-        height: 52
+        property bool controllerFocused:
+        window.controllerActive &&
+        window.controllerFocusIndex === controllerIndex
 
-        scale: hovered ? 1.06 : 1.0
+        signal buttonClicked()
 
-        Behavior on scale {
-            NumberAnimation {
-                duration: 120
-                easing.type: Easing.OutCubic
-            }
-        }
+        width: 85
+        height: 60
 
         Rectangle {
             anchors.fill: parent
 
-            radius: 18
+            radius: 0
+
+            topLeftRadius:
+            button.controllerIndex === 5 ? 20 : 0
+
+            bottomLeftRadius:
+            button.controllerIndex === 5 ? 20 : 0
+
+            topRightRadius:
+            button.controllerIndex === 8 ? 20 : 0
+
+            bottomRightRadius:
+            button.controllerIndex === 8 ? 20 : 0
 
             color:
-            hovered
+            hovered || controllerFocused
             ? "#29292f"
-            : "#16161b"
+            : "transparent"
 
-            border.width: 1
+            border.width:
+            hovered || controllerFocused
+            ? 1
+            : 0
 
-            border.color:
-            hovered
-            ? "#3a3a42"
-            : "#27272e"
+            border.color: "#3a3a42"
 
             Behavior on color {
                 ColorAnimation {
-                    duration: 100
+                    duration: 120
                 }
             }
 
             Behavior on border.color {
                 ColorAnimation {
-                    duration: 100
+                    duration: 120
                 }
             }
         }
 
-        /*
-         * SETTINGS ICON
-         */
+        // --------------------------------------------------------
+        // SETTINGS — ACTUAL GEAR
+        // --------------------------------------------------------
 
-        Item {
+        Image {
             visible: button.iconType === "settings"
-
             anchors.centerIn: parent
-
-            width: 28
-            height: 28
-
-            Repeater {
-                model: 8
-
-                Rectangle {
-                    width: 5
-                    height: 8
-
-                    radius: 1.5
-
-                    color: "#f2f2f5"
-
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.top: parent.top
-
-                    anchors.topMargin: 1
-
-                    transformOrigin: Item.Bottom
-
-                    rotation: index * 45
-                }
-            }
-
-            Rectangle {
-                anchors.centerIn: parent
-
-                width: 19
-                height: 19
-
-                radius: 9.5
-
-                color: "#f2f2f5"
-            }
-
-            Rectangle {
-                anchors.centerIn: parent
-
-                width: 8
-                height: 8
-
-                radius: 4
-
-                color: "#16161b"
-            }
+            width: 32
+            height: 32
+	    source: "../icons/settings.svg"
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            mipmap: true
         }
 
-        /*
-         * BLUETOOTH ICON
-         */
+        // --------------------------------------------------------
+        // BLUETOOTH
+        // --------------------------------------------------------
 
         Canvas {
-            visible: button.iconType === "bluetooth"
+            visible:
+            button.iconType === "bluetooth"
 
             anchors.centerIn: parent
 
-            width: 24
-            height: 28
+            width: 25
+            height: 29
 
             onPaint: {
                 var ctx = getContext("2d")
 
-                ctx.clearRect(0, 0, width, height)
+                ctx.clearRect(
+                    0,
+                    0,
+                    width,
+                    height
+                )
 
                 ctx.strokeStyle = "#f2f2f5"
-                ctx.lineWidth = 2.3
+                ctx.lineWidth = 2.4
                 ctx.lineCap = "round"
                 ctx.lineJoin = "round"
 
@@ -1589,36 +3623,44 @@ ApplicationWindow {
                 ctx.beginPath()
 
                 ctx.moveTo(cx, 2)
-                ctx.lineTo(cx, 26)
+                ctx.lineTo(cx, 27)
 
                 ctx.moveTo(cx, 2)
                 ctx.lineTo(19, 8)
                 ctx.lineTo(7, 18)
 
-                ctx.moveTo(cx, 26)
-                ctx.lineTo(19, 20)
-                ctx.lineTo(7, 8)
+                ctx.moveTo(cx, 27)
+                ctx.lineTo(19, 21)
+                ctx.lineTo(7, 9)
 
                 ctx.stroke()
             }
         }
 
-        /*
-         * WIFI ICON
-         */
+        // --------------------------------------------------------
+        // WI-FI
+        // --------------------------------------------------------
 
         Canvas {
-            visible: button.iconType === "wifi"
+            visible:
+            button.iconType === "wifi"
 
-            anchors.centerIn: parent
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: -2
 
-            width: 30
-            height: 27
+            width: 31
+            height: 28
 
             onPaint: {
                 var ctx = getContext("2d")
 
-                ctx.clearRect(0, 0, width, height)
+                ctx.clearRect(
+                    0,
+                    0,
+                    width,
+                    height
+                )
 
                 ctx.strokeStyle = "#f2f2f5"
                 ctx.fillStyle = "#f2f2f5"
@@ -1627,69 +3669,120 @@ ApplicationWindow {
                 ctx.lineCap = "round"
 
                 var cx = width / 2
-                var dotY = height - 4
+                var cy = height - 4
 
                 ctx.beginPath()
+
                 ctx.arc(
                     cx,
-                    dotY,
-                    6.5,
+                    cy,
+                    15,
                     Math.PI * 1.22,
                     Math.PI * 1.78
                 )
+
                 ctx.stroke()
 
                 ctx.beginPath()
+
                 ctx.arc(
                     cx,
-                    dotY,
-                    11.5,
+                    cy,
+                    10,
                     Math.PI * 1.22,
                     Math.PI * 1.78
                 )
+
                 ctx.stroke()
 
                 ctx.beginPath()
+
                 ctx.arc(
                     cx,
-                    dotY,
-                    16.5,
+                    cy,
+                    5,
                     Math.PI * 1.22,
                     Math.PI * 1.78
                 )
+
                 ctx.stroke()
 
                 ctx.beginPath()
+
                 ctx.arc(
                     cx,
-                    dotY,
-                    2.0,
+                    cy,
+                    2,
                     0,
                     Math.PI * 2
                 )
+
                 ctx.fill()
             }
         }
 
-        /*
-         * POWER ICON
-         */
+        // --------------------------------------------------------
+        // POWER
+        // --------------------------------------------------------
 
-        Text {
-            visible: button.iconType === "power"
+        Canvas {
+            visible:
+            button.iconType === "power"
 
             anchors.centerIn: parent
 
-            text: "⏻"
+            width: 29
+            height: 29
 
-            color: "#f2f2f5"
+            onPaint: {
+                var ctx = getContext("2d")
 
-            font.family: "sans-serif"
-            font.pixelSize: 29
-            font.weight: Font.Normal
+                ctx.clearRect(
+                    0,
+                    0,
+                    width,
+                    height
+                )
 
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
+                ctx.strokeStyle = "#f2f2f5"
+                ctx.lineWidth = 2.6
+                ctx.lineCap = "round"
+
+                var cx = width / 2
+                var cy = height / 2
+
+                ctx.beginPath()
+
+                ctx.moveTo(cx, 3)
+                ctx.lineTo(cx, 13)
+
+                ctx.stroke()
+
+                ctx.beginPath()
+
+                ctx.arc(
+                    cx,
+                    cy + 1,
+                    10.5,
+                    Math.PI * 1.75,
+                    Math.PI * 3.25,
+                    false
+                )
+
+                ctx.stroke()
+            }
+        }
+
+        Rectangle {
+            visible: button.controllerIndex !== 5
+
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+
+            width: 1
+
+            color: "#24242b"
         }
 
         MouseArea {
@@ -1697,25 +3790,64 @@ ApplicationWindow {
 
             hoverEnabled: true
 
-            onEntered: button.hovered = true
-            onExited: button.hovered = false
+            onEntered:
+            button.hovered = true
 
-            onClicked: {
-                if (button.iconType === "settings") {
-                    window.weatherOpen = false
-                    window.bluetoothOpen = false
+            onExited:
+            button.hovered = false
+
+            onClicked:
+            button.buttonClicked()
+        }
+
+        onButtonClicked: {
+            if (button.iconType === "settings") {
+                window.weatherOpen = false
+                window.bluetoothOpen = false
+                window.wifiOpen = false
+                window.powerOpen = false
+
+                if (typeof settingsLauncher !== "undefined")
                     settingsLauncher.open()
 
-                } else if (button.iconType === "bluetooth") {
-                    window.weatherOpen = false
-                    window.bluetoothOpen = !window.bluetoothOpen
+                    return
+            }
 
-                } else if (button.iconType === "wifi") {
-                    console.log("Wi-Fi")
+            if (button.iconType === "bluetooth") {
+                window.weatherOpen = false
+                window.wifiOpen = false
+                window.powerOpen = false
 
-                } else if (button.iconType === "power") {
-                    console.log("Power")
-                }
+                window.bluetoothOpen =
+                !window.bluetoothOpen
+
+                return
+            }
+
+            if (button.iconType === "wifi") {
+                window.weatherOpen = false
+                window.bluetoothOpen = false
+                window.powerOpen = false
+
+                window.wifiOpen =
+                !window.wifiOpen
+
+                if (window.wifiOpen &&
+                    typeof systemManager !== "undefined") {
+
+                    systemManager.refreshWifi()
+                    }
+
+                    return
+            }
+
+            if (button.iconType === "power") {
+                window.weatherOpen = false
+                window.bluetoothOpen = false
+                window.wifiOpen = false
+
+                window.powerOpen =
+                !window.powerOpen
             }
         }
     }

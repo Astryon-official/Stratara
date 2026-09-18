@@ -9,6 +9,5 @@ class SettingsLauncher final : public QObject
 public:
     explicit SettingsLauncher(QObject *parent = nullptr);
 
-public slots:
-    void open();
+    Q_INVOKABLE void open();
 };

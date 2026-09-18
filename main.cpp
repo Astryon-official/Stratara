@@ -3,6 +3,7 @@
 #include <QQmlContext>
 
 #include "services/BluetoothManager.h"
+#include "services/SystemManager.h"
 #include "services/ControllerManager.h"
 #include "services/SettingsLauncher.h"
 
@@ -13,6 +14,7 @@ int main(int argc, char *argv[])
     ControllerManager controllerManager;
     SettingsLauncher settingsLauncher;
     BluetoothManager bluetoothManager;
+    SystemManager systemManager;
 
     QQmlApplicationEngine engine;
 
@@ -29,6 +31,11 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(
         "bluetoothManager",
         &bluetoothManager
+    );
+
+    engine.rootContext()->setContextProperty(
+        "systemManager",
+        &systemManager
     );
 
     engine.loadFromModule(

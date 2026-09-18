@@ -29,6 +29,9 @@ qt_add_executable(stratara-app
 
     services/BluetoothManager.cpp
     services/BluetoothManager.h
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/services/SystemManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/services/SystemManager.h
 )
 
 target_include_directories(stratara-app PRIVATE
@@ -43,8 +46,12 @@ qt_add_qml_module(stratara-app
     URI Stratara
     VERSION 1.0
 
-    QML_FILES
-        shell/StrataraShell.qml
+QML_FILES
+    shell/StrataraShell.qml
+    shell/panels/LiveTV/LiveTVPanel.qml
+
+    RESOURCES
+        icons/settings.svg
 )
 
 target_link_libraries(stratara-app PRIVATE
