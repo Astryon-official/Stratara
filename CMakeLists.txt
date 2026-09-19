@@ -48,6 +48,10 @@ qt_add_qml_module(stratara-app
 
 QML_FILES
     shell/StrataraShell.qml
+    shell/components/GlassCard.qml
+    shell/components/SystemButton.qml
+    shell/components/PanelOption.qml
+    shell/components/PanelAction.qml
     shell/panels/LiveTV/LiveTVPanel.qml
 
     RESOURCES

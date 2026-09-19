@@ -75,11 +75,42 @@ void ControllerManager::openGamepad(unsigned int instanceId)
         return;
     }
 
-    const char *name = SDL_GetGamepadName(m_gamepad);
-    setConnected(true, QString::fromUtf8(name ? name : "Xbox Controller"));
+SDL_Joystick *joystick = SDL_GetGamepadJoystick(m_gamepad);
+const char *name = joystick ? SDL_GetJoystickName(joystick) : nullptr;
 
-    SDL_Log("Stratara ControllerManager: connected: %s",
-            name ? name : "Xbox Controller");
+const SDL_JoystickID joystickId = SDL_GetGamepadID(m_gamepad);
+
+const SDL_GamepadType mappedType =
+    SDL_GetGamepadTypeForID(joystickId);
+
+const SDL_GamepadType realType =
+    SDL_GetRealGamepadTypeForID(joystickId);
+
+const Uint16 vendor =
+    SDL_GetGamepadVendorForID(joystickId);
+
+const Uint16 product =
+    SDL_GetGamepadProductForID(joystickId);
+
+const char *mappedTypeName =
+    SDL_GetGamepadStringForType(mappedType);
+
+const char *realTypeName =
+    SDL_GetGamepadStringForType(realType);
+
+setConnected(true, QString::fromUtf8(name ? name : "Xbox Controller"));
+
+SDL_Log("Stratara ControllerManager: connected: %s",
+        name ? name : "Xbox Controller");
+
+SDL_Log("Stratara ControllerManager: mapped type: %s",
+        mappedTypeName ? mappedTypeName : "Unknown");
+
+SDL_Log("Stratara ControllerManager: real type: %s",
+        realTypeName ? realTypeName : "Unknown");
+
+SDL_Log("Stratara ControllerManager: vendor: 0x%04X, product: 0x%04X",
+        vendor, product);
 }
 
 void ControllerManager::closeGamepad()

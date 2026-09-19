@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Window
 import QtPositioning
 import QtQuick.Layouts
+import Stratara 1.0
 
 ApplicationWindow {
     id: window
@@ -906,6 +907,10 @@ ApplicationWindow {
                 title: "Streaming"
                 subtitle: "Movies, shows and music"
                 controllerIndex: 0
+                controllerActive: window.controllerActive
+                controllerFocusIndex: window.controllerFocusIndex
+                regularFont: montserratRegular.name
+                semiBoldFont: montserratSemiBold.name
 
                 onCardClicked:
                 console.log("Streaming")
@@ -918,6 +923,10 @@ ApplicationWindow {
                 title: "Games"
                 subtitle: "Your games, all together"
                 controllerIndex: 1
+                controllerActive: window.controllerActive
+                controllerFocusIndex: window.controllerFocusIndex
+                regularFont: montserratRegular.name
+                semiBoldFont: montserratSemiBold.name
 
                 onCardClicked:
                 console.log("Games")
@@ -930,6 +939,10 @@ ApplicationWindow {
                 title: "Apps"
                 subtitle: "Everything you need"
                 controllerIndex: 2
+                controllerActive: window.controllerActive
+                controllerFocusIndex: window.controllerFocusIndex
+                regularFont: montserratRegular.name
+                semiBoldFont: montserratSemiBold.name
 
                 onCardClicked:
                 console.log("Apps")
@@ -942,6 +955,10 @@ ApplicationWindow {
                 title: "Live TV"
                 subtitle: "TV, channels and more"
                 controllerIndex: 3
+                controllerActive: window.controllerActive
+                controllerFocusIndex: window.controllerFocusIndex
+                regularFont: montserratRegular.name
+                semiBoldFont: montserratSemiBold.name
 
                 onCardClicked: {
                     liveTVOpen = true
@@ -1673,6 +1690,10 @@ ApplicationWindow {
 
                 iconType: "settings"
                 controllerIndex: 5
+                controllerActive: window.controllerActive
+                controllerFocusIndex: window.controllerFocusIndex
+                regularFont: montserratRegular.name
+                semiBoldFont: montserratSemiBold.name
             }
 
             SystemButton {
@@ -1680,6 +1701,10 @@ ApplicationWindow {
 
                 iconType: "bluetooth"
                 controllerIndex: 6
+                controllerActive: window.controllerActive
+                controllerFocusIndex: window.controllerFocusIndex
+                regularFont: montserratRegular.name
+                semiBoldFont: montserratSemiBold.name
             }
 
             SystemButton {
@@ -1687,6 +1712,10 @@ ApplicationWindow {
 
                 iconType: "wifi"
                 controllerIndex: 7
+                controllerActive: window.controllerActive
+                controllerFocusIndex: window.controllerFocusIndex
+                regularFont: montserratRegular.name
+                semiBoldFont: montserratSemiBold.name
             }
 
             SystemButton {
@@ -1694,6 +1723,10 @@ ApplicationWindow {
 
                 iconType: "power"
                 controllerIndex: 8
+                controllerActive: window.controllerActive
+                controllerFocusIndex: window.controllerFocusIndex
+                regularFont: montserratRegular.name
+                semiBoldFont: montserratSemiBold.name
             }
         }
     }
@@ -1794,6 +1827,8 @@ ApplicationWindow {
             anchors.topMargin: 78
 
             height: 58
+	    regularFont: montserratRegular.name
+	    mediumFont: montserratMedium.name
 
             focused:
             controllerActive &&
@@ -2109,6 +2144,8 @@ ApplicationWindow {
 
             height: 52
 
+	    mediumFont: montserratMedium.name
+
             focused:
             controllerActive &&
             bluetoothControllerFocus ===
@@ -2406,7 +2443,10 @@ ApplicationWindow {
             anchors.rightMargin: 26
             anchors.topMargin: 78
 
-            height: 58
+	    height: 58
+
+	    regularFont: montserratRegular.name
+	    mediumFont: montserratMedium.name
 
             focused:
             controllerActive &&
@@ -3102,190 +3142,6 @@ ApplicationWindow {
     }
 
     // ============================================================
-    // PANEL OPTION
-    // ============================================================
-
-    component PanelOption: Item {
-        property string title: ""
-        property string subtitle: ""
-
-        property bool focused: false
-        property bool hovered: false
-
-        property bool enabledState: true
-
-        signal clicked()
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 16
-
-            color:
-            hovered || focused
-            ? "#29292f"
-            : "#17171d"
-
-            border.width: 1
-
-            border.color:
-            hovered || focused
-            ? "#5a5a66"
-            : "#292930"
-
-            opacity:
-            enabledState
-            ? 1.0
-            : 0.65
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: 120
-                }
-            }
-
-            Behavior on border.color {
-                ColorAnimation {
-                    duration: 120
-                }
-            }
-        }
-
-        Column {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-
-            anchors.leftMargin: 16
-            anchors.rightMargin: 16
-
-            spacing: 2
-
-            Text {
-                text: title
-
-                color: "#f2f2f5"
-
-                font.family: montserratMedium.name
-                font.pixelSize: 15
-            }
-
-            Text {
-                width: parent.width
-
-                text: subtitle
-
-                color:
-                hovered || focused
-                ? "#c9c9d1"
-                : "#92929c"
-
-                font.family: montserratRegular.name
-                font.pixelSize: 13
-
-                elide: Text.ElideRight
-            }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-
-            hoverEnabled: true
-
-            enabled: parent.enabledState
-
-            onEntered:
-            parent.hovered = true
-
-            onExited:
-            parent.hovered = false
-
-            onClicked:
-            parent.clicked()
-        }
-    }
-
-    // ============================================================
-    // PANEL ACTION
-    // ============================================================
-
-    component PanelAction: Item {
-        property string title: ""
-
-        property bool focused: false
-        property bool hovered: false
-        property bool enabledState: true
-
-        signal clicked()
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 16
-
-            color:
-            hovered || focused
-            ? "#29292f"
-            : "#1b1b21"
-
-            border.width: 1
-
-            border.color:
-            hovered || focused
-            ? "#5a5a66"
-            : "#2b2b32"
-
-            opacity:
-            enabledState
-            ? 1.0
-            : 0.65
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: 120
-                }
-            }
-
-            Behavior on border.color {
-                ColorAnimation {
-                    duration: 120
-                }
-            }
-        }
-
-        Text {
-            anchors.centerIn: parent
-
-            text: title
-
-            color:
-            enabledState
-            ? "#f2f2f5"
-            : "#6d6d76"
-
-            font.family: montserratMedium.name
-            font.pixelSize: 15
-        }
-
-        MouseArea {
-            anchors.fill: parent
-
-            hoverEnabled: true
-
-            enabled: parent.enabledState
-
-            onEntered:
-            parent.hovered = true
-
-            onExited:
-            parent.hovered = false
-
-            onClicked:
-            parent.clicked()
-        }
-    }
-
-    // ============================================================
     // POWER OPTION
     // ============================================================
 
@@ -3391,464 +3247,5 @@ ApplicationWindow {
         }
     }
 
-    // ============================================================
-    // GLASS CARD
-    // ============================================================
 
-    component GlassCard: Item {
-        property string title: ""
-        property string subtitle: ""
-        property int controllerIndex: -1
-
-        property bool hovered: false
-
-        property bool controllerFocused:
-        window.controllerActive &&
-        window.controllerFocusIndex === controllerIndex
-
-        signal cardClicked()
-
-        scale:
-        hovered || controllerFocused
-        ? 1.035
-        : 1.0
-
-        Behavior on scale {
-            NumberAnimation {
-                duration: 120
-                easing.type: Easing.OutCubic
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 26
-
-            color: "#101014"
-
-            opacity:
-            hovered || controllerFocused
-            ? 0.98
-            : 0.90
-
-            border.width: 1
-
-            border.color:
-            hovered || controllerFocused
-            ? "#3b3b44"
-            : "#29292f"
-        }
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 26
-
-            color: "#29292f"
-
-            opacity:
-            hovered || controllerFocused
-            ? 0.32
-            : 0
-        }
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 26
-
-            color: "transparent"
-
-            border.width: 1
-            border.color: "#ffffff"
-
-            opacity:
-            hovered || controllerFocused
-            ? 0.085
-            : 0.045
-        }
-
-        Column {
-            anchors.left: parent.left
-            anchors.bottom: parent.bottom
-
-            anchors.leftMargin: 27
-            anchors.bottomMargin: 25
-
-            spacing: 7
-
-            Text {
-                text: title
-
-                color: "white"
-
-                font.family: montserratSemiBold.name
-                font.pixelSize: 25
-            }
-
-            Text {
-                text: subtitle
-
-                color: "#a4a4ae"
-
-                font.family: montserratRegular.name
-                font.pixelSize: 15
-            }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-
-            hoverEnabled: true
-
-            onEntered:
-            parent.hovered = true
-
-            onExited:
-            parent.hovered = false
-
-            onClicked:
-            parent.cardClicked()
-        }
-    }
-
-    // ============================================================
-    // SYSTEM BUTTON
-    // ============================================================
-
-    component SystemButton: Item {
-        id: button
-
-        property string iconType: ""
-        property int controllerIndex: -1
-        property bool hovered: false
-
-        property bool controllerFocused:
-        window.controllerActive &&
-        window.controllerFocusIndex === controllerIndex
-
-        signal buttonClicked()
-
-        width: 85
-        height: 60
-
-        Rectangle {
-            anchors.fill: parent
-
-            radius: 0
-
-            topLeftRadius:
-            button.controllerIndex === 5 ? 20 : 0
-
-            bottomLeftRadius:
-            button.controllerIndex === 5 ? 20 : 0
-
-            topRightRadius:
-            button.controllerIndex === 8 ? 20 : 0
-
-            bottomRightRadius:
-            button.controllerIndex === 8 ? 20 : 0
-
-            color:
-            hovered || controllerFocused
-            ? "#29292f"
-            : "transparent"
-
-            border.width:
-            hovered || controllerFocused
-            ? 1
-            : 0
-
-            border.color: "#3a3a42"
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: 120
-                }
-            }
-
-            Behavior on border.color {
-                ColorAnimation {
-                    duration: 120
-                }
-            }
-        }
-
-        // --------------------------------------------------------
-        // SETTINGS — ACTUAL GEAR
-        // --------------------------------------------------------
-
-        Image {
-            visible: button.iconType === "settings"
-            anchors.centerIn: parent
-            width: 32
-            height: 32
-	    source: "../icons/settings.svg"
-            fillMode: Image.PreserveAspectFit
-            smooth: true
-            mipmap: true
-        }
-
-        // --------------------------------------------------------
-        // BLUETOOTH
-        // --------------------------------------------------------
-
-        Canvas {
-            visible:
-            button.iconType === "bluetooth"
-
-            anchors.centerIn: parent
-
-            width: 25
-            height: 29
-
-            onPaint: {
-                var ctx = getContext("2d")
-
-                ctx.clearRect(
-                    0,
-                    0,
-                    width,
-                    height
-                )
-
-                ctx.strokeStyle = "#f2f2f5"
-                ctx.lineWidth = 2.4
-                ctx.lineCap = "round"
-                ctx.lineJoin = "round"
-
-                var cx = width / 2
-
-                ctx.beginPath()
-
-                ctx.moveTo(cx, 2)
-                ctx.lineTo(cx, 27)
-
-                ctx.moveTo(cx, 2)
-                ctx.lineTo(19, 8)
-                ctx.lineTo(7, 18)
-
-                ctx.moveTo(cx, 27)
-                ctx.lineTo(19, 21)
-                ctx.lineTo(7, 9)
-
-                ctx.stroke()
-            }
-        }
-
-        // --------------------------------------------------------
-        // WI-FI
-        // --------------------------------------------------------
-
-        Canvas {
-            visible:
-            button.iconType === "wifi"
-
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: -2
-
-            width: 31
-            height: 28
-
-            onPaint: {
-                var ctx = getContext("2d")
-
-                ctx.clearRect(
-                    0,
-                    0,
-                    width,
-                    height
-                )
-
-                ctx.strokeStyle = "#f2f2f5"
-                ctx.fillStyle = "#f2f2f5"
-
-                ctx.lineWidth = 2.3
-                ctx.lineCap = "round"
-
-                var cx = width / 2
-                var cy = height - 4
-
-                ctx.beginPath()
-
-                ctx.arc(
-                    cx,
-                    cy,
-                    15,
-                    Math.PI * 1.22,
-                    Math.PI * 1.78
-                )
-
-                ctx.stroke()
-
-                ctx.beginPath()
-
-                ctx.arc(
-                    cx,
-                    cy,
-                    10,
-                    Math.PI * 1.22,
-                    Math.PI * 1.78
-                )
-
-                ctx.stroke()
-
-                ctx.beginPath()
-
-                ctx.arc(
-                    cx,
-                    cy,
-                    5,
-                    Math.PI * 1.22,
-                    Math.PI * 1.78
-                )
-
-                ctx.stroke()
-
-                ctx.beginPath()
-
-                ctx.arc(
-                    cx,
-                    cy,
-                    2,
-                    0,
-                    Math.PI * 2
-                )
-
-                ctx.fill()
-            }
-        }
-
-        // --------------------------------------------------------
-        // POWER
-        // --------------------------------------------------------
-
-        Canvas {
-            visible:
-            button.iconType === "power"
-
-            anchors.centerIn: parent
-
-            width: 29
-            height: 29
-
-            onPaint: {
-                var ctx = getContext("2d")
-
-                ctx.clearRect(
-                    0,
-                    0,
-                    width,
-                    height
-                )
-
-                ctx.strokeStyle = "#f2f2f5"
-                ctx.lineWidth = 2.6
-                ctx.lineCap = "round"
-
-                var cx = width / 2
-                var cy = height / 2
-
-                ctx.beginPath()
-
-                ctx.moveTo(cx, 3)
-                ctx.lineTo(cx, 13)
-
-                ctx.stroke()
-
-                ctx.beginPath()
-
-                ctx.arc(
-                    cx,
-                    cy + 1,
-                    10.5,
-                    Math.PI * 1.75,
-                    Math.PI * 3.25,
-                    false
-                )
-
-                ctx.stroke()
-            }
-        }
-
-        Rectangle {
-            visible: button.controllerIndex !== 5
-
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-
-            width: 1
-
-            color: "#24242b"
-        }
-
-        MouseArea {
-            anchors.fill: parent
-
-            hoverEnabled: true
-
-            onEntered:
-            button.hovered = true
-
-            onExited:
-            button.hovered = false
-
-            onClicked:
-            button.buttonClicked()
-        }
-
-        onButtonClicked: {
-            if (button.iconType === "settings") {
-                window.weatherOpen = false
-                window.bluetoothOpen = false
-                window.wifiOpen = false
-                window.powerOpen = false
-
-                if (typeof settingsLauncher !== "undefined")
-                    settingsLauncher.open()
-
-                    return
-            }
-
-            if (button.iconType === "bluetooth") {
-                window.weatherOpen = false
-                window.wifiOpen = false
-                window.powerOpen = false
-
-                window.bluetoothOpen =
-                !window.bluetoothOpen
-
-                return
-            }
-
-            if (button.iconType === "wifi") {
-                window.weatherOpen = false
-                window.bluetoothOpen = false
-                window.powerOpen = false
-
-                window.wifiOpen =
-                !window.wifiOpen
-
-                if (window.wifiOpen &&
-                    typeof systemManager !== "undefined") {
-
-                    systemManager.refreshWifi()
-                    }
-
-                    return
-            }
-
-            if (button.iconType === "power") {
-                window.weatherOpen = false
-                window.bluetoothOpen = false
-                window.wifiOpen = false
-
-                window.powerOpen =
-                !window.powerOpen
-            }
-        }
-    }
 }

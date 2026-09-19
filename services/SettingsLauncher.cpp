@@ -9,5 +9,5 @@ SettingsLauncher::SettingsLauncher(QObject *parent)
 
 void SettingsLauncher::open()
 {
-    QProcess::startDetached(QStringLiteral("systemsettings"));
+    QProcess::startDetached("noctalia", {"msg", "settings-open"});
 }
